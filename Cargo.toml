@@ -4,5 +4,4 @@ version = "0.1.0"
 authors = ["Mark LeMoine <thatsgobbles@gmail.com>"]
 
 [dependencies]
-regex = "0.2"
 tempdir = "0.3"

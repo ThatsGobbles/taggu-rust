@@ -1,45 +1,27 @@
 use std::path::Path;
 use std::path::PathBuf;
 use std::path::Component;
-// use std::fs;
-// use std::cmp;
-// use std::ops::Fn;
+use std::ffi::OsStr;
 use std::fmt;
-// use regex::Regex;
+use std::collections::HashSet;
+use std::fs::DirEntry;
 
 use error::MediaLibraryError;
 use ::path::normalize;
-
-// const EXT: &str = "flac";
-
-// fn default_media_item_filter(abs_path: &Path) -> bool {
-//     abs_path.is_dir() || (abs_path.is_file() && abs_path.extension() == Some(ffi::OsStr::new(EXT)))
-// }
-
-// enum MediaFileCriteria<'a> {
-//     Ext(&'a str),
-//     Prefix(&'a str),
-//     Suffix(&'a str),
-//     Regex(&'a Regex),
-//     IsDir,
-//     IsFile,
-//     And(&'a MediaFileCriteria<'a>, &'a MediaFileCriteria<'a>),
-//     Or(&'a MediaFileCriteria<'a>, &'a MediaFileCriteria<'a>),
-//     Not(&'a MediaFileCriteria<'a>),
-// }
 
 struct MediaLibrary {
     root_dir: PathBuf,
     item_meta_fn: String,
     self_meta_fn: String,
-    // media_item_filter: fn(&Path) -> bool,
+    media_item_filter: fn(&Path) -> bool,
     // media_item_sort_key: FS,
 }
 
 impl MediaLibrary {
     pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
             item_meta_fn: S,
-            self_meta_fn: S)
+            self_meta_fn: S,
+            media_item_filter: fn(&Path) -> bool)
             -> Result<MediaLibrary, MediaLibraryError> {
         let root_dir = try!(root_dir.as_ref().to_path_buf().canonicalize());
 
@@ -51,7 +33,14 @@ impl MediaLibrary {
             root_dir: root_dir,
             item_meta_fn: item_meta_fn.as_ref().to_string(),
             self_meta_fn: self_meta_fn.as_ref().to_string(),
+            media_item_filter: media_item_filter,
         })
+    }
+
+    pub fn default_media_item_filter(abs_item_path: &Path) -> bool {
+        abs_item_path.is_dir()
+            || (abs_item_path.is_file()
+                    && abs_item_path.extension() == Some(OsStr::new("flac")))
     }
 
     pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
@@ -97,6 +86,106 @@ impl MediaLibrary {
 
         Ok((rel_sub_path, abs_sub_path))
     }
+
+    pub fn get_contains_dir<P: AsRef<Path>>(&self, rel_item_path: P) -> Option<PathBuf> {
+        if let Ok((rel, abs)) = self.co_norm(&rel_item_path) {
+            if abs.is_dir() {
+                return Some(rel)
+            }
+        }
+
+        None
+    }
+
+    pub fn get_siblings_dir<P: AsRef<Path>>(&self, rel_item_path: P) -> Option<PathBuf> {
+        if let Ok((rel, abs)) = self.co_norm(&rel_item_path) {
+            // TODO: Remove .unwrap().
+            let n_parent = normalize(rel.parent().unwrap());
+
+            if n_parent != rel {
+                return Some(n_parent)
+            }
+        }
+
+        None
+    }
+
+    pub fn all_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
+        let mut found_entries: Vec<DirEntry> = vec![];
+
+        // Co-normalize and use new absolute path.
+        if let Ok((_, abs_sub_dir_path)) = self.co_norm(&rel_sub_dir_path) {
+            if let Ok(dir_entries) = abs_sub_dir_path.read_dir() {
+                for dir_entry in dir_entries {
+                    if let Ok(dir_entry) = dir_entry {
+                        found_entries.push(dir_entry);
+                    }
+                }
+            }
+        }
+
+        found_entries
+    }
+
+    pub fn filtered_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
+        let mut found_entries: Vec<DirEntry> = vec![];
+        let pred = self.media_item_filter;
+
+        // LEARN: This causes a move from the original vector, which is fine in this case.
+        for dir_entry in self.all_entries_in_dir(rel_sub_dir_path) {
+            if pred(&dir_entry.path()) {
+                found_entries.push(dir_entry);
+            }
+        }
+
+        found_entries
+    }
+
+    pub fn fuzzy_name_lookup<P: AsRef<Path>, S: AsRef<str>>(&self, rel_sub_dir_path: P, prefix: S) -> Option<PathBuf> {
+        let res = self.co_norm(&rel_sub_dir_path).ok();
+
+        if let Some((rel, abs)) = res {
+            if abs.is_dir() {
+
+            }
+        }
+
+        None
+    }
+
+    // def fuzzy_name_lookup(cls, *, rel_sub_dir_path: pl.Path, prefix_item_name: str) -> str:
+    //     rel_sub_dir_path, abs_sub_dir_path = cls.co_norm(rel_sub_path=rel_sub_dir_path)
+
+    //     pattern = f'{prefix_item_name}*'
+    //     results = tuple(abs_sub_dir_path.glob(pattern))
+
+    //     if len(results) != 1:
+    //         msg = (f'Incorrect number of matches for fuzzy lookup of "{prefix_item_name}" '
+    //                f'in directory "{rel_sub_dir_path}"; '
+    //                f'expected: 1, found: {len(results)}')
+    //         logger.error(msg)
+    //         raise tex.NonUniqueFuzzyFileLookup(msg)
+
+    //     abs_found_path = results[0]
+    //     return abs_found_path.name
+
+    // pub fn meta_files_from_item<P: AsRef<Path>>(&self, rel_item_path: P) -> Vec<P> {
+    //     vec![]
+    // }
+}
+
+pub fn example() {
+    let media_lib = MediaLibrary::new("/home/lemoine/Music", "taggu_item.yml", "taggu_self.yml", MediaLibrary::default_media_item_filter).unwrap();
+
+    println!("UNFILTERED");
+    for dir_entry in media_lib.all_entries_in_dir("BASS AVENGERS") {
+        println!("{:?}", dir_entry);
+    }
+
+    println!("FILTERED");
+    for dir_entry in media_lib.filtered_entries_in_dir("BASS AVENGERS") {
+        println!("{:?}", dir_entry);
+    }
 }
 
 impl fmt::Debug for MediaLibrary {
@@ -105,38 +194,9 @@ impl fmt::Debug for MediaLibrary {
     }
 }
 
-pub fn example() {
-    let m = MediaLibrary::new("/home/lemoine/Music", "taggu_item.yml", "taggu_self.yml");
-
-    let m = match m {
-        Ok(x) => x,
-        Err(err) => { println!("Error: {}", err); return (); },
-    };
-
-    println!("{:?}", m);
-
-    fn success(norm_tup: (PathBuf, PathBuf)) -> Result<(PathBuf, PathBuf), MediaLibraryError> {
-        println!("{:?}", norm_tup);
-        Ok(norm_tup)
-    }
-
-    fn error(err: MediaLibraryError) -> Result<(PathBuf, PathBuf), MediaLibraryError> {
-        println!("{}", err);
-        Err(err)
-    }
-
-    let _ = m.co_norm("/Psystyle Nation").and_then(success).or_else(error);
-    let _ = m.co_norm("Psystyle Nation").and_then(success).or_else(error);
-    let _ = m.co_norm("../Psystyle Nation").and_then(success).or_else(error);
-    let _ = m.co_norm("BASS AVENGERS/../Saturdays/TRACK01//").and_then(success).or_else(error);
-    let _ = m.co_norm(".").and_then(success).or_else(error);
-    let _ = m.co_norm("..").and_then(success).or_else(error);
-}
-
 #[cfg(test)]
 mod tests {
     use super::MediaLibrary;
-    use std::path::Path;
     use std::path::PathBuf;
     use tempdir::TempDir;
 
@@ -144,7 +204,12 @@ mod tests {
     fn test_co_norm_valid() {
         let temp = TempDir::new("media_lib").unwrap();
         let root_dir = temp.path();
-        let media_lib = MediaLibrary::new(root_dir, "item.yml", "self.yml").unwrap();
+        let media_lib = MediaLibrary::new(
+            root_dir,
+            "item.yml",
+            "self.yml",
+            MediaLibrary::default_media_item_filter,
+        ).unwrap();
 
         let expected = (PathBuf::from("subdir"), root_dir.join("subdir").to_path_buf());
         let produced = media_lib.co_norm("subdir").unwrap();
@@ -164,5 +229,39 @@ mod tests {
         );
         let produced = media_lib.co_norm("subdir/subdir/").unwrap();
         assert_eq!(expected, produced);
+
+        let expected = (
+            PathBuf::from("subdir/subdir"),
+            root_dir.join("subdir").join("subdir").to_path_buf()
+        );
+        let produced = media_lib.co_norm("subdir/extra/../subdir/").unwrap();
+        assert_eq!(expected, produced);
+
+        let expected = (
+            PathBuf::from("subdir"),
+            root_dir.join("subdir").to_path_buf()
+        );
+        let produced = media_lib.co_norm("subdir/./").unwrap();
+        assert_eq!(expected, produced);
+    }
+
+    #[test]
+    fn test_is_valid_item_name() {
+        assert_eq!(true, MediaLibrary::is_valid_item_name("simple"));
+        assert_eq!(true, MediaLibrary::is_valid_item_name("simple.ext"));
+        assert_eq!(true, MediaLibrary::is_valid_item_name("spaces ok"));
+        assert_eq!(true, MediaLibrary::is_valid_item_name("questions?"));
+        assert_eq!(true, MediaLibrary::is_valid_item_name("exclamation!"));
+        assert_eq!(true, MediaLibrary::is_valid_item_name("period."));
+        assert_eq!(true, MediaLibrary::is_valid_item_name(".period"));
+
+        assert_eq!(false, MediaLibrary::is_valid_item_name(""));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("."));
+        assert_eq!(false, MediaLibrary::is_valid_item_name(".."));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("/simple"));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("simple/"));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("/"));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("/simple/more"));
+        assert_eq!(false, MediaLibrary::is_valid_item_name("simple/more"));
     }
 }
