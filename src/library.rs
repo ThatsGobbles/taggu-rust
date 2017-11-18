@@ -2,27 +2,27 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::path::Component;
 use std::ffi::OsStr;
-use std::fmt;
-use std::collections::HashSet;
+// use std::collections::HashSet;
 use std::fs::DirEntry;
 
 use error::MediaLibraryError;
 use ::path::normalize;
 
-struct MediaLibrary {
+struct MediaLibrary<B> where B: Ord {
     root_dir: PathBuf,
     item_meta_fn: String,
     self_meta_fn: String,
     media_item_filter: fn(&Path) -> bool,
-    // media_item_sort_key: FS,
+    media_item_sort_key: fn(&Path) -> B,
 }
 
-impl MediaLibrary {
+impl<B> MediaLibrary<B> where B: Ord {
     pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
             item_meta_fn: S,
             self_meta_fn: S,
-            media_item_filter: fn(&Path) -> bool)
-            -> Result<MediaLibrary, MediaLibraryError> {
+            media_item_filter: fn(&Path) -> bool,
+            media_item_sort_key: fn(&Path) -> B)
+            -> Result<MediaLibrary<B>, MediaLibraryError> {
         let root_dir = try!(root_dir.as_ref().to_path_buf().canonicalize());
 
         if !root_dir.is_dir() {
@@ -34,6 +34,7 @@ impl MediaLibrary {
             item_meta_fn: item_meta_fn.as_ref().to_string(),
             self_meta_fn: self_meta_fn.as_ref().to_string(),
             media_item_filter: media_item_filter,
+            media_item_sort_key: media_item_sort_key,
         })
     }
 
@@ -41,6 +42,10 @@ impl MediaLibrary {
         abs_item_path.is_dir()
             || (abs_item_path.is_file()
                     && abs_item_path.extension() == Some(OsStr::new("flac")))
+    }
+
+    pub fn default_media_item_sort_key(abs_item_path: &Path) -> PathBuf {
+        abs_item_path.to_path_buf()
     }
 
     pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
@@ -132,6 +137,7 @@ impl MediaLibrary {
         let pred = self.media_item_filter;
 
         // LEARN: This causes a move from the original vector, which is fine in this case.
+        // TODO: Make into iterator and use .collect().
         for dir_entry in self.all_entries_in_dir(rel_sub_dir_path) {
             if pred(&dir_entry.path()) {
                 found_entries.push(dir_entry);
@@ -139,6 +145,10 @@ impl MediaLibrary {
         }
 
         found_entries
+    }
+
+    pub fn entries_to_abs_fps(dir_entries: &[DirEntry]) -> Vec<PathBuf> {
+        dir_entries.iter().map(|x| { x.path() }).collect()
     }
 
     pub fn fuzzy_name_lookup<P: AsRef<Path>, S: AsRef<str>>(&self, rel_sub_dir_path: P, prefix: S) -> Option<PathBuf> {
@@ -175,22 +185,25 @@ impl MediaLibrary {
 }
 
 pub fn example() {
-    let media_lib = MediaLibrary::new("/home/lemoine/Music", "taggu_item.yml", "taggu_self.yml", MediaLibrary::default_media_item_filter).unwrap();
+    let media_lib = MediaLibrary::new("/home/lemoine/Music",
+            "taggu_item.yml",
+            "taggu_self.yml",
+            MediaLibrary::default_media_item_filter,
+            MediaLibrary::default_media_item_sort_key,
+    ).unwrap();
 
     println!("UNFILTERED");
-    for dir_entry in media_lib.all_entries_in_dir("BASS AVENGERS") {
+    let mut a_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
+    &mut a_entries.sort_by_key(MediaLibrary::default_media_item_sort_key);
+    for dir_entry in a_entries {
         println!("{:?}", dir_entry);
     }
 
     println!("FILTERED");
-    for dir_entry in media_lib.filtered_entries_in_dir("BASS AVENGERS") {
+    let mut f_entries = MediaLibrary::entries_to_abs_fps(&media_lib.filtered_entries_in_dir("BASS AVENGERS"));
+    &mut f_entries.sort_by_key(MediaLibrary::default_media_item_sort_key);
+    for dir_entry in f_entries {
         println!("{:?}", dir_entry);
-    }
-}
-
-impl fmt::Debug for MediaLibrary {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "MediaLibrary {{ root_dir: {:?}, item_meta_fn: {:?}, self_meta_fn: {:?} }}", self.root_dir, self.item_meta_fn, self.self_meta_fn)
     }
 }
 
