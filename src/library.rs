@@ -21,35 +21,17 @@ enum MediaSelection {
     Not(Box<MediaSelection>),
 }
 
-struct MediaLibrary<FF, FS, O, PP>
-where
-    O: Ord,
-    PP: AsRef<Path>,
-    FF: Fn(PP) -> bool,
-    FS: Fn(PP) -> O,
-{
+struct MediaLibrary {
     root_dir: PathBuf,
     item_meta_fn: String,
     self_meta_fn: String,
-    media_item_filter: FF,
-    media_item_sort_key: FS,
-    _o: PhantomData<O>,
-    _p: PhantomData<PP>,
 }
 
-impl<FF, FS, O, PP> MediaLibrary<FF, FS, O, PP>
-where
-    FF: Fn(PP) -> bool,
-    FS: Fn(PP) -> O,
-    O: Ord,
-    PP: AsRef<Path>,
-{
+impl MediaLibrary {
     pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
             item_meta_fn: S,
             self_meta_fn: S,
-            media_item_filter: FF,
-            media_item_sort_key: FS,
-            ) -> Result<MediaLibrary<FF, FS, O, PP>, MediaLibraryError> {
+            ) -> Result<MediaLibrary, MediaLibraryError> {
         let root_dir = try!(root_dir.as_ref().to_path_buf().canonicalize());
 
         if !root_dir.is_dir() {
@@ -60,22 +42,7 @@ where
             root_dir: root_dir,
             item_meta_fn: item_meta_fn.as_ref().to_string(),
             self_meta_fn: self_meta_fn.as_ref().to_string(),
-            media_item_filter: media_item_filter,
-            media_item_sort_key: media_item_sort_key,
-            _o: PhantomData,
-            _p: PhantomData,
         })
-    }
-
-    pub fn default_media_item_filter<P: AsRef<Path>>(abs_item_path: P) -> bool {
-        let abs_item_path = abs_item_path.as_ref();
-        abs_item_path.is_dir()
-            || (abs_item_path.is_file()
-                    && abs_item_path.extension() == Some(OsStr::new("flac")))
-    }
-
-    pub fn default_media_item_sort_key<P: AsRef<Path>>(abs_item_path: P) -> PathBuf {
-        abs_item_path.as_ref().to_path_buf()
     }
 
     pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
@@ -162,20 +129,20 @@ where
         found_entries
     }
 
-    pub fn filtered_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
-        let mut found_entries: Vec<DirEntry> = vec![];
-        let pred = |e| (self.media_item_filter)(e);
+    // pub fn filtered_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
+    //     let mut found_entries: Vec<DirEntry> = vec![];
+    //     let pred = |e| (self.media_item_filter)(e);
 
-        // LEARN: This causes a move from the original vector, which is fine in this case.
-        // TODO: Make into iterator and use .collect().
-        for dir_entry in self.all_entries_in_dir(rel_sub_dir_path) {
-            if pred(&dir_entry.path()) {
-                found_entries.push(dir_entry);
-            }
-        }
+    //     // LEARN: This causes a move from the original vector, which is fine in this case.
+    //     // TODO: Make into iterator and use .collect().
+    //     for dir_entry in self.all_entries_in_dir(rel_sub_dir_path) {
+    //         if pred(&dir_entry.path()) {
+    //             found_entries.push(dir_entry);
+    //         }
+    //     }
 
-        found_entries
-    }
+    //     found_entries
+    // }
 
     pub fn entries_to_abs_fps(dir_entries: &[DirEntry]) -> Vec<PathBuf> {
         dir_entries.iter().map(|x| { x.path() }).collect()
@@ -218,22 +185,9 @@ pub fn example() {
     let media_lib = MediaLibrary::new("/home/lemoine/Music",
             "taggu_item.yml",
             "taggu_self.yml",
-            MediaLibrary::default_media_item_filter,
-            MediaLibrary::default_media_item_sort_key,
     ).unwrap();
 
-    // println!("UNFILTERED");
-    // let mut a_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
-    // a_entries.sort_by_key(|e| MediaLibrary::default_media_item_sort_key(e));
-    // a_entries.sort_by_key(|e| (media_lib.media_item_sort_key)(e));
-    // for dir_entry in a_entries {
-    //     println!("{:?}", dir_entry);
-    // }
-
-    println!("FILTERED");
-    let mut f_entries = MediaLibrary::entries_to_abs_fps(&media_lib.filtered_entries_in_dir("BASS AVENGERS"));
-    // f_entries.sort_by_key(|e| MediaLibrary::default_media_item_sort_key(e));
-    f_entries.sort_by_key(|&e| (media_lib.media_item_sort_key)(&e));
+    let mut f_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
     for dir_entry in f_entries {
         println!("{:?}", dir_entry);
     }
