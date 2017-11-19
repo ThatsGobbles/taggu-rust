@@ -1,4 +1,5 @@
 extern crate tempdir;
+extern crate regex;
 
 mod library;
 mod error;

@@ -1,28 +1,55 @@
 use std::path::Path;
 use std::path::PathBuf;
 use std::path::Component;
-use std::ffi::OsStr;
-// use std::collections::HashSet;
+use std::ffi::{OsStr, OsString};
 use std::fs::DirEntry;
+use std::marker::PhantomData;
+use regex::Regex;
 
 use error::MediaLibraryError;
 use ::path::normalize;
 
-struct MediaLibrary<B> where B: Ord {
+enum MediaSelection {
+    Ext(OsString),
+    Regex(Regex),
+    IsFile,
+    IsDir,
+    IsSymlink,
+    And(Box<MediaSelection>, Box<MediaSelection>),
+    Or(Box<MediaSelection>, Box<MediaSelection>),
+    Xor(Box<MediaSelection>, Box<MediaSelection>),
+    Not(Box<MediaSelection>),
+}
+
+struct MediaLibrary<FF, FS, O, PP>
+where
+    O: Ord,
+    PP: AsRef<Path>,
+    FF: Fn(PP) -> bool,
+    FS: Fn(PP) -> O,
+{
     root_dir: PathBuf,
     item_meta_fn: String,
     self_meta_fn: String,
-    media_item_filter: fn(&Path) -> bool,
-    media_item_sort_key: fn(&Path) -> B,
+    media_item_filter: FF,
+    media_item_sort_key: FS,
+    _o: PhantomData<O>,
+    _p: PhantomData<PP>,
 }
 
-impl<B> MediaLibrary<B> where B: Ord {
+impl<FF, FS, O, PP> MediaLibrary<FF, FS, O, PP>
+where
+    FF: Fn(PP) -> bool,
+    FS: Fn(PP) -> O,
+    O: Ord,
+    PP: AsRef<Path>,
+{
     pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
             item_meta_fn: S,
             self_meta_fn: S,
-            media_item_filter: fn(&Path) -> bool,
-            media_item_sort_key: fn(&Path) -> B)
-            -> Result<MediaLibrary<B>, MediaLibraryError> {
+            media_item_filter: FF,
+            media_item_sort_key: FS,
+            ) -> Result<MediaLibrary<FF, FS, O, PP>, MediaLibraryError> {
         let root_dir = try!(root_dir.as_ref().to_path_buf().canonicalize());
 
         if !root_dir.is_dir() {
@@ -35,17 +62,20 @@ impl<B> MediaLibrary<B> where B: Ord {
             self_meta_fn: self_meta_fn.as_ref().to_string(),
             media_item_filter: media_item_filter,
             media_item_sort_key: media_item_sort_key,
+            _o: PhantomData,
+            _p: PhantomData,
         })
     }
 
-    pub fn default_media_item_filter(abs_item_path: &Path) -> bool {
+    pub fn default_media_item_filter<P: AsRef<Path>>(abs_item_path: P) -> bool {
+        let abs_item_path = abs_item_path.as_ref();
         abs_item_path.is_dir()
             || (abs_item_path.is_file()
                     && abs_item_path.extension() == Some(OsStr::new("flac")))
     }
 
-    pub fn default_media_item_sort_key(abs_item_path: &Path) -> PathBuf {
-        abs_item_path.to_path_buf()
+    pub fn default_media_item_sort_key<P: AsRef<Path>>(abs_item_path: P) -> PathBuf {
+        abs_item_path.as_ref().to_path_buf()
     }
 
     pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
@@ -93,7 +123,7 @@ impl<B> MediaLibrary<B> where B: Ord {
     }
 
     pub fn get_contains_dir<P: AsRef<Path>>(&self, rel_item_path: P) -> Option<PathBuf> {
-        if let Ok((rel, abs)) = self.co_norm(&rel_item_path) {
+        if let Ok((rel, abs)) = self.co_norm(rel_item_path) {
             if abs.is_dir() {
                 return Some(rel)
             }
@@ -103,7 +133,7 @@ impl<B> MediaLibrary<B> where B: Ord {
     }
 
     pub fn get_siblings_dir<P: AsRef<Path>>(&self, rel_item_path: P) -> Option<PathBuf> {
-        if let Ok((rel, abs)) = self.co_norm(&rel_item_path) {
+        if let Ok((rel, abs)) = self.co_norm(rel_item_path) {
             // TODO: Remove .unwrap().
             let n_parent = normalize(rel.parent().unwrap());
 
@@ -119,7 +149,7 @@ impl<B> MediaLibrary<B> where B: Ord {
         let mut found_entries: Vec<DirEntry> = vec![];
 
         // Co-normalize and use new absolute path.
-        if let Ok((_, abs_sub_dir_path)) = self.co_norm(&rel_sub_dir_path) {
+        if let Ok((_, abs_sub_dir_path)) = self.co_norm(rel_sub_dir_path) {
             if let Ok(dir_entries) = abs_sub_dir_path.read_dir() {
                 for dir_entry in dir_entries {
                     if let Ok(dir_entry) = dir_entry {
@@ -134,7 +164,7 @@ impl<B> MediaLibrary<B> where B: Ord {
 
     pub fn filtered_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
         let mut found_entries: Vec<DirEntry> = vec![];
-        let pred = self.media_item_filter;
+        let pred = |e| (self.media_item_filter)(e);
 
         // LEARN: This causes a move from the original vector, which is fine in this case.
         // TODO: Make into iterator and use .collect().
@@ -152,7 +182,7 @@ impl<B> MediaLibrary<B> where B: Ord {
     }
 
     pub fn fuzzy_name_lookup<P: AsRef<Path>, S: AsRef<str>>(&self, rel_sub_dir_path: P, prefix: S) -> Option<PathBuf> {
-        let res = self.co_norm(&rel_sub_dir_path).ok();
+        let res = self.co_norm(rel_sub_dir_path).ok();
 
         if let Some((rel, abs)) = res {
             if abs.is_dir() {
@@ -192,16 +222,18 @@ pub fn example() {
             MediaLibrary::default_media_item_sort_key,
     ).unwrap();
 
-    println!("UNFILTERED");
-    let mut a_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
-    &mut a_entries.sort_by_key(MediaLibrary::default_media_item_sort_key);
-    for dir_entry in a_entries {
-        println!("{:?}", dir_entry);
-    }
+    // println!("UNFILTERED");
+    // let mut a_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
+    // a_entries.sort_by_key(|e| MediaLibrary::default_media_item_sort_key(e));
+    // a_entries.sort_by_key(|e| (media_lib.media_item_sort_key)(e));
+    // for dir_entry in a_entries {
+    //     println!("{:?}", dir_entry);
+    // }
 
     println!("FILTERED");
     let mut f_entries = MediaLibrary::entries_to_abs_fps(&media_lib.filtered_entries_in_dir("BASS AVENGERS"));
-    &mut f_entries.sort_by_key(MediaLibrary::default_media_item_sort_key);
+    // f_entries.sort_by_key(|e| MediaLibrary::default_media_item_sort_key(e));
+    f_entries.sort_by_key(|&e| (media_lib.media_item_sort_key)(&e));
     for dir_entry in f_entries {
         println!("{:?}", dir_entry);
     }
