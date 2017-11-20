@@ -1,36 +1,75 @@
 use std::path::Path;
 use std::path::PathBuf;
 use std::path::Component;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fs::DirEntry;
-use std::marker::PhantomData;
+use std::ops::Generator;
+
 use regex::Regex;
 
 use error::MediaLibraryError;
-use ::path::normalize;
+use path::normalize;
+
+use generator::gen_to_iter;
 
 enum MediaSelection {
-    Ext(OsString),
+    Ext(String),
     Regex(Regex),
     IsFile,
     IsDir,
-    IsSymlink,
     And(Box<MediaSelection>, Box<MediaSelection>),
     Or(Box<MediaSelection>, Box<MediaSelection>),
     Xor(Box<MediaSelection>, Box<MediaSelection>),
     Not(Box<MediaSelection>),
 }
 
+fn is_media_path<P: AsRef<Path>>(abs_item_path: P, sel: &MediaSelection) -> bool {
+    // Assume that the path is already normalized.
+    let abs_item_path = abs_item_path.as_ref();
+
+    // TODO: Test if the path exists? If so, return false.
+    if !abs_item_path.exists() {
+        return false
+    }
+
+    match sel {
+        &MediaSelection::Ext(ref e_ext) => {
+            if let Some(p_ext) = abs_item_path.extension() {
+                OsString::from(e_ext) == p_ext
+            } else {
+                false
+            }
+        },
+        &MediaSelection::Regex(ref r_exp) => {
+            let maybe_fn = abs_item_path.file_name().map(|x| x.to_str());
+
+            if let Some(Some(fn_str)) = maybe_fn {
+                r_exp.is_match(fn_str)
+            } else {
+                false
+            }
+        },
+        &MediaSelection::IsFile => abs_item_path.is_file(),
+        &MediaSelection::IsDir => abs_item_path.is_dir(),
+        &MediaSelection::And(ref sel_a, ref sel_b) => is_media_path(abs_item_path, &sel_a) && is_media_path(abs_item_path, &sel_b),
+        &MediaSelection::Or(ref sel_a, ref sel_b) => is_media_path(abs_item_path, &sel_a) || is_media_path(abs_item_path, &sel_b),
+        &MediaSelection::Xor(ref sel_a, ref sel_b) => is_media_path(abs_item_path, &sel_a) ^ is_media_path(abs_item_path, &sel_b),
+        &MediaSelection::Not(ref sel) => !is_media_path(abs_item_path, &sel),
+    }
+}
+
 struct MediaLibrary {
     root_dir: PathBuf,
     item_meta_fn: String,
     self_meta_fn: String,
+    media_selection: MediaSelection,
 }
 
 impl MediaLibrary {
     pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
             item_meta_fn: S,
             self_meta_fn: S,
+            media_selection: MediaSelection,
             ) -> Result<MediaLibrary, MediaLibraryError> {
         let root_dir = try!(root_dir.as_ref().to_path_buf().canonicalize());
 
@@ -42,6 +81,7 @@ impl MediaLibrary {
             root_dir: root_dir,
             item_meta_fn: item_meta_fn.as_ref().to_string(),
             self_meta_fn: self_meta_fn.as_ref().to_string(),
+            media_selection,
         })
     }
 
@@ -89,6 +129,12 @@ impl MediaLibrary {
         Ok((rel_sub_path, abs_sub_path))
     }
 
+    fn is_valid_media_item<P: AsRef<Path>>(&self, abs_item_path: P) -> bool {
+        // Assume path is absolute and normalized.
+        let sel = &self.media_selection;
+        is_media_path(abs_item_path, sel)
+    }
+
     pub fn get_contains_dir<P: AsRef<Path>>(&self, rel_item_path: P) -> Option<PathBuf> {
         if let Ok((rel, abs)) = self.co_norm(rel_item_path) {
             if abs.is_dir() {
@@ -112,82 +158,60 @@ impl MediaLibrary {
         None
     }
 
-    pub fn all_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
-        let mut found_entries: Vec<DirEntry> = vec![];
-
+    pub fn all_entries_in_dir<'a, P: AsRef<Path> + 'a>(&'a self, rel_sub_dir_path: P) -> impl Iterator<Item = DirEntry> + 'a {
         // Co-normalize and use new absolute path.
-        if let Ok((_, abs_sub_dir_path)) = self.co_norm(rel_sub_dir_path) {
-            if let Ok(dir_entries) = abs_sub_dir_path.read_dir() {
-                for dir_entry in dir_entries {
-                    if let Ok(dir_entry) = dir_entry {
-                        found_entries.push(dir_entry);
+        let closure = move || match self.co_norm(rel_sub_dir_path) {
+            Ok((_, abs_sub_dir_path)) => {
+                let iter = abs_sub_dir_path.read_dir();
+                if let Ok(dir_entries) = iter {
+                    for dir_entry in dir_entries {
+                        if let Ok(dir_entry) = dir_entry {
+                            yield dir_entry;
+                        }
                     }
-                }
+                };
+            },
+            _ => {
+                let d: Vec<DirEntry> = vec![];
+
+                for x in d {
+                    yield x;
+                };
             }
-        }
+        };
 
-        found_entries
+        gen_to_iter(closure)
     }
 
-    // pub fn filtered_entries_in_dir<P: AsRef<Path>>(&self, rel_sub_dir_path: P) -> Vec<DirEntry> {
-    //     let mut found_entries: Vec<DirEntry> = vec![];
-    //     let pred = |e| (self.media_item_filter)(e);
-
-    //     // LEARN: This causes a move from the original vector, which is fine in this case.
-    //     // TODO: Make into iterator and use .collect().
-    //     for dir_entry in self.all_entries_in_dir(rel_sub_dir_path) {
-    //         if pred(&dir_entry.path()) {
-    //             found_entries.push(dir_entry);
-    //         }
-    //     }
-
-    //     found_entries
-    // }
-
-    pub fn entries_to_abs_fps(dir_entries: &[DirEntry]) -> Vec<PathBuf> {
-        dir_entries.iter().map(|x| { x.path() }).collect()
+    pub fn filtered_entries_in_dir<'a, P: AsRef<Path> + 'a>(&'a self, rel_sub_dir_path: P) -> impl Iterator<Item = DirEntry> + 'a {
+        self.all_entries_in_dir(rel_sub_dir_path).filter(move |x| self.is_valid_media_item(x.path()))
     }
-
-    pub fn fuzzy_name_lookup<P: AsRef<Path>, S: AsRef<str>>(&self, rel_sub_dir_path: P, prefix: S) -> Option<PathBuf> {
-        let res = self.co_norm(rel_sub_dir_path).ok();
-
-        if let Some((rel, abs)) = res {
-            if abs.is_dir() {
-
-            }
-        }
-
-        None
-    }
-
-    // def fuzzy_name_lookup(cls, *, rel_sub_dir_path: pl.Path, prefix_item_name: str) -> str:
-    //     rel_sub_dir_path, abs_sub_dir_path = cls.co_norm(rel_sub_path=rel_sub_dir_path)
-
-    //     pattern = f'{prefix_item_name}*'
-    //     results = tuple(abs_sub_dir_path.glob(pattern))
-
-    //     if len(results) != 1:
-    //         msg = (f'Incorrect number of matches for fuzzy lookup of "{prefix_item_name}" '
-    //                f'in directory "{rel_sub_dir_path}"; '
-    //                f'expected: 1, found: {len(results)}')
-    //         logger.error(msg)
-    //         raise tex.NonUniqueFuzzyFileLookup(msg)
-
-    //     abs_found_path = results[0]
-    //     return abs_found_path.name
-
-    // pub fn meta_files_from_item<P: AsRef<Path>>(&self, rel_item_path: P) -> Vec<P> {
-    //     vec![]
-    // }
 }
 
 pub fn example() {
+    let selection = MediaSelection::Or(
+        Box::new(MediaSelection::IsDir),
+        Box::new(MediaSelection::And(
+            Box::new(MediaSelection::IsFile),
+            Box::new(MediaSelection::Ext("flac".to_string())),
+        )),
+    );
+
     let media_lib = MediaLibrary::new("/home/lemoine/Music",
             "taggu_item.yml",
             "taggu_self.yml",
+            // MediaSelection::IsFile,
+            selection,
     ).unwrap();
 
-    let mut f_entries = MediaLibrary::entries_to_abs_fps(&media_lib.all_entries_in_dir("BASS AVENGERS"));
+    println!("UNFILTERED");
+    let a_entries: Vec<DirEntry> = media_lib.all_entries_in_dir("BASS AVENGERS").collect();
+    for dir_entry in a_entries {
+        println!("{:?}", dir_entry);
+    }
+
+    println!("FILTERED");
+    let f_entries: Vec<DirEntry> = media_lib.filtered_entries_in_dir("BASS AVENGERS").collect();
     for dir_entry in f_entries {
         println!("{:?}", dir_entry);
     }
