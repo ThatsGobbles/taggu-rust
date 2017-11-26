@@ -3,14 +3,20 @@
 
 extern crate tempdir;
 extern crate regex;
+extern crate yaml_rust;
+#[macro_use] extern crate maplit;
 
 mod library;
 mod error;
 mod path;
 mod generator;
+mod yaml;
+mod metadata;
 
 fn main() {
     library::example();
+    yaml::example();
+    // metadata::example();
 
     // let mut paths = vec![];
 

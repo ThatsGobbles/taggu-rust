@@ -6,3 +6,5 @@ authors = ["Mark LeMoine <thatsgobbles@gmail.com>"]
 [dependencies]
 tempdir = "0.3"
 regex = "0.2"
+yaml-rust = "0.4"
+maplit = "1.0.0"
