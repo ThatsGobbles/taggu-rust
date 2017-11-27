@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use yaml_rust::Yaml;
 
 use generator::gen_to_iter;
-use library::{MediaLibrary, SortOrder, Selection};
+// use library::{MediaLibrary, SortOrder, Selection};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum MetaKey {
@@ -25,20 +25,29 @@ pub type SelfMetadata = MetaBlock;
 pub type ItemSeqMetadata = Vec<MetaBlock>;
 pub type ItemMapMetadata = BTreeMap<String, MetaBlock>;
 
-fn yaml_as_meta_key(y: &Yaml) -> Option<MetaKey> {
+fn yaml_as_string(y: &Yaml) -> Option<String> {
     match y {
-        &Yaml::Null => Some(MetaKey::Null),
+        &Yaml::Null => None,
         &Yaml::Array(_) => None,
         &Yaml::Hash(_) => None,
-        &Yaml::String(ref s) => Some(MetaKey::String(s.to_string())),
+        &Yaml::String(ref s) => Some(s.to_string()),
 
         // TODO: The rest of these need to be revisited.
         // Ideally we would keep them as strings and not convert when parsing.
-        &Yaml::Real(ref r) => Some(MetaKey::String(r.to_string())),
-        &Yaml::Integer(i) => Some(MetaKey::String(i.to_string())),
-        &Yaml::Boolean(b) => Some(MetaKey::String(b.to_string())),
+        &Yaml::Real(ref r) => Some(r.to_string()),
+        &Yaml::Integer(i) => Some(i.to_string()),
+        &Yaml::Boolean(b) => Some(b.to_string()),
         &Yaml::Alias(_) => None,
         &Yaml::BadValue => None,
+    }
+}
+
+fn yaml_as_meta_key(y: &Yaml) -> Option<MetaKey> {
+    match y {
+        &Yaml::Null => Some(MetaKey::Null),
+        _ => {
+            yaml_as_string(&y).map(|s| MetaKey::String(s))
+        },
     }
 }
 
@@ -49,9 +58,9 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
             let mut seq: Vec<MetaValue> = vec![];
 
             // Recursively convert each found YAML item into a meta value.
-            for sy in arr {
-                if let Some(conv_val) = yaml_as_meta_value(&sy) {
-                    seq.push(conv_val);
+            for val_y in arr {
+                if let Some(val) = yaml_as_meta_value(&val_y) {
+                    seq.push(val);
                 } else {
                     // TODO: Log that an unexpected value was found.
                 }
@@ -63,11 +72,11 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
             let mut map: BTreeMap<MetaKey, MetaValue> = BTreeMap::new();
 
             // Recursively convert each found YAML item into a meta value.
-            for (sk, sv) in hsh {
-                let conv_key = yaml_as_meta_key(&sk);
-                let conv_val = yaml_as_meta_value(&sv);
+            for (key_y, val_y) in hsh {
+                let maybe_key = yaml_as_meta_key(&key_y);
+                let maybe_val = yaml_as_meta_value(&val_y);
 
-                if let (Some(key), Some(val)) = (conv_key, conv_val) {
+                if let (Some(key), Some(val)) = (maybe_key, maybe_val) {
                     map.insert(key, val);
                 } else {
                     // TODO: Log that an unexpected value was found.
@@ -76,27 +85,154 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
 
             Some(MetaValue::Mapping(map))
         },
-        &Yaml::String(ref s) => Some(MetaValue::String(s.to_string())),
-
-        // TODO: The rest of these need to be revisited.
-        // Ideally we would keep them as strings and not convert when parsing.
-        &Yaml::Real(ref r) => Some(MetaValue::String(r.to_string())),
-        &Yaml::Integer(i) => Some(MetaValue::String(i.to_string())),
-        &Yaml::Boolean(b) => Some(MetaValue::String(b.to_string())),
-        &Yaml::Alias(_) => None,
-        &Yaml::BadValue => None,
+        _ => {
+            yaml_as_string(&y).map(|s| MetaValue::String(s))
+        },
     }
 }
 
-pub fn yaml_as_self_metadata(y: &Yaml) -> SelfMetadata {
+fn yaml_as_meta_block(y: &Yaml) -> Option<MetaBlock> {
+    // Try to convert to a hash.
+    match y {
+        &Yaml::Hash(ref hsh) => {
+            let mut mb = MetaBlock::new();
+
+            // Keys must be convertible to strings.
+            // Values can be any meta value.
+            for (key_y, val_y) in hsh {
+                let maybe_key = yaml_as_string(&key_y);
+                let maybe_val = yaml_as_meta_value(&val_y);
+
+                if let (Some(key), Some(val)) = (maybe_key, maybe_val) {
+                    mb.insert(key, val);
+                } else {
+                    // TODO: Log that an unexpected value was found.
+                }
+            }
+
+            Some(mb)
+        },
+        _ => None,
+    }
+}
+
+pub fn yaml_as_self_metadata(y: &Yaml) -> Option<SelfMetadata> {
     // Try to convert to self-metadata.
-    SelfMetadata::new()
+    // We expect a meta block.
+    yaml_as_meta_block(&y)
+}
+
+pub fn yaml_as_item_seq_metadata(y: &Yaml) -> Option<ItemSeqMetadata> {
+    // Try to convert to sequenced item-metadata.
+    // We expect a vector of meta blocks.
+    match y {
+        &Yaml::Array(ref arr) => {
+            let mut item_seq = ItemSeqMetadata::new();
+
+            for val_y in arr {
+                if let Some(mb) = yaml_as_meta_block(&val_y) {
+                    item_seq.push(mb);
+                } else {
+                    // TODO: Log that an unexpected value was found.
+                }
+            }
+
+            Some(item_seq)
+        },
+        _ => None,
+    }
+}
+
+pub fn yaml_as_item_map_metadata(y: &Yaml) -> Option<ItemMapMetadata> {
+    // Try to convert to mapped item-metadata.
+    // We expect a mapping of file names to meta blocks.
+    match y {
+        &Yaml::Hash(ref hsh) => {
+            let mut item_map = ItemMapMetadata::new();
+
+            for (key_y, val_y) in hsh {
+                let maybe_key = yaml_as_string(&key_y);
+                let maybe_val = yaml_as_meta_block(&val_y);
+
+                if let (Some(key), Some(val)) = (maybe_key, maybe_val) {
+                    item_map.insert(key, val);
+                } else {
+                    // TODO: Log that an unexpected value was found.
+                }
+            }
+
+            Some(item_map)
+        },
+        _ => None,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{MetaKey, MetaValue, yaml_as_meta_key, yaml_as_meta_value};
+    use super::{
+        MetaKey,
+        MetaValue,
+        MetaBlock,
+        yaml_as_string,
+        yaml_as_meta_key,
+        yaml_as_meta_value,
+        yaml_as_meta_block,
+    };
     use yaml_rust::{Yaml, YamlLoader};
+
+    #[test]
+    fn test_yaml_as_string() {
+        let inputs_and_expected = vec![
+            // Strings
+            ("foo", Some("foo".to_string())),
+            (r#""foo""#, Some("foo".to_string())),
+            (r#"'foo'"#, Some("foo".to_string())),
+            (r#""\"foo\"""#, Some(r#""foo""#.to_string())),
+            (r#""[foo, bar]""#, Some("[foo, bar]".to_string())),
+            (r#""foo: bar""#, Some("foo: bar".to_string())),
+            (r#""foo:    bar""#, Some("foo:    bar".to_string())),
+
+            // Integers
+            ("27", Some("27".to_string())),
+            ("-27", Some("-27".to_string())),
+            // TODO: This does not work, due to it getting parsed as an int and losing the plus.
+            // ("+27", Some("+27".to_string())),
+
+            // Floats
+            ("3.14", Some("3.14".to_string())),
+            ("3.14159265358979323846264338327950288419716939937510582", Some("3.14159265358979323846264338327950288419716939937510582".to_string())),
+
+            // Nulls
+            ("~", None),
+            ("null", None),
+
+            // Booleans
+            ("True", Some("True".to_string())),
+            ("true", Some("true".to_string())),
+            ("False", Some("False".to_string())),
+            ("false", Some("false".to_string())),
+
+            // Sequences
+            ("- item_a\n- item_b", None),
+            ("- item_a", None),
+            ("[item_a, item_b]", None),
+            ("[item_a]", None),
+
+            // Mappings
+            ("key_a: val_a\nkey_b: val_b", None),
+            ("key_a: val_a", None),
+            ("{key_a: val_a, key_b: val_b}", None),
+            ("{key_a: val_a}", None),
+
+            // Aliases
+        ];
+
+        for (input, expected) in inputs_and_expected {
+            let yaml = &YamlLoader::load_from_str(input).unwrap()[0];
+            let produced = yaml_as_string(yaml);
+            assert_eq!(expected, produced);
+        }
+    }
 
     #[test]
     fn test_yaml_as_meta_key() {
@@ -230,6 +366,87 @@ mod tests {
         for (input, expected) in inputs_and_expected {
             let yaml = &YamlLoader::load_from_str(input).unwrap()[0];
             let produced = yaml_as_meta_value(yaml);
+            assert_eq!(expected, produced);
+        }
+    }
+
+    #[test]
+    fn test_yaml_as_meta_block() {
+        let inputs_and_expected = vec![
+            // Invalid blocks
+            ("foo", None),
+            ("27", None),
+            ("-27", None),
+            ("3.14", None),
+            ("3.14159265358979323846264338327950288419716939937510582", None),
+            ("~", None),
+            ("null", None),
+            ("true", None),
+            ("false", None),
+            ("- item_a\n- item_b", None),
+            ("[item_a, item_b]", None),
+
+            // Valid blocks
+            ("key_a: val_a\nkey_b: val_b", {
+                let mut mb = MetaBlock::new();
+                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                mb.insert("key_b".to_string(), MetaValue::String("val_b".to_string()));
+                Some(mb)
+            }),
+            ("{key_a: val_a, key_b: val_b}", {
+                let mut mb = MetaBlock::new();
+                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                mb.insert("key_b".to_string(), MetaValue::String("val_b".to_string()));
+                Some(mb)
+            }),
+            ("{key_a: [val_a_a, val_a_b, val_a_c], key_b: ~}", {
+                let mut mb = MetaBlock::new();
+                mb.insert(
+                    "key_a".to_string(),
+                    MetaValue::Sequence(vec![
+                        MetaValue::String("val_a_a".to_string()),
+                        MetaValue::String("val_a_b".to_string()),
+                        MetaValue::String("val_a_c".to_string()),
+                    ])
+                );
+                mb.insert("key_b".to_string(), MetaValue::Null);
+                Some(mb)
+            }),
+            ("{key_a: {sub_key_a: sub_val_a, sub_key_b: sub_val_b, ~: sub_val_c}, key_b: []}", {
+                let mut mb = MetaBlock::new();
+                mb.insert(
+                    "key_a".to_string(),
+                    MetaValue::Mapping(btreemap![
+                        MetaKey::String("sub_key_a".to_string()) => MetaValue::String("sub_val_a".to_string()),
+                        MetaKey::String("sub_key_b".to_string()) => MetaValue::String("sub_val_b".to_string()),
+                        MetaKey::Null => MetaValue::String("sub_val_c".to_string()),
+                    ])
+                );
+                mb.insert("key_b".to_string(), MetaValue::Sequence(vec![]));
+                Some(mb)
+            }),
+
+            // Skipped entries
+            ("{key_a: val_a, [skipped_key, skipped_key]: skipped_val}", {
+                let mut mb = MetaBlock::new();
+                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                Some(mb)
+            }),
+            ("{key_a: val_a, {skipped_key_key: skipped_key_val}: skipped_val}", {
+                let mut mb = MetaBlock::new();
+                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                Some(mb)
+            }),
+            ("{key_a: val_a, ~: skipped_val}", {
+                let mut mb = MetaBlock::new();
+                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                Some(mb)
+            }),
+        ];
+
+        for (input, expected) in inputs_and_expected {
+            let yaml = &YamlLoader::load_from_str(input).unwrap()[0];
+            let produced = yaml_as_meta_block(yaml);
             assert_eq!(expected, produced);
         }
     }

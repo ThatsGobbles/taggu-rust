@@ -15,7 +15,6 @@ mod metadata;
 
 fn main() {
     library::example();
-    yaml::example();
     // metadata::example();
 
     // let mut paths = vec![];
