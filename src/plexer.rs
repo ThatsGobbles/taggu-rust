@@ -8,9 +8,6 @@ use metadata::MetaBlock;
 
 pub fn iter_self_meta_plexer<'a, P: AsRef<Path> + 'a>(media_lib: &'a MediaLibrary, rel_sub_dir_path: P) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
     let closure = move || {
-        for c_rel_dir in media_lib.get_contains_dir(rel_sub_dir_path) {
-
-        }
         if false {
             yield (PathBuf::new(), MetaBlock::new())
         }
@@ -19,7 +16,7 @@ pub fn iter_self_meta_plexer<'a, P: AsRef<Path> + 'a>(media_lib: &'a MediaLibrar
 }
 
 pub fn iter_item_meta_plexer<'a, P: AsRef<Path> + 'a>(media_lib: &'a MediaLibrary, rel_sub_dir_path: P) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
-    let closure = || {
+    let closure = move || {
         if false {
             yield (PathBuf::new(), MetaBlock::new())
         }
