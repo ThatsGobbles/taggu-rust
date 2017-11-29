@@ -12,25 +12,10 @@ mod path;
 mod generator;
 mod yaml;
 mod metadata;
+mod plexer;
+mod discovery;
 
 fn main() {
     library::example();
     // metadata::example();
-
-    // let mut paths = vec![];
-
-    // paths.push(Path::new("../../home/thatsgobbles/././music/../code/.."));
-    // paths.push(Path::new("/home//thatsgobbles/music/"));
-    // paths.push(Path::new("/../../home/thatsgobbles/././code/../music/.."));
-    // paths.push(Path::new(".."));
-    // paths.push(Path::new("/.."));
-    // paths.push(Path::new("../"));
-    // paths.push(Path::new("/"));
-    // paths.push(Path::new(""));
-    // // More tests for Windows (especially with drive letters and UNC paths) needed.
-
-    // for p in &paths {
-    //     let np = normalize(&p);
-    //     println!("{:?} ==> {:?}", &p, &np);
-    // }
 }

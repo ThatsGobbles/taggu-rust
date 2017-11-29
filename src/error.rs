@@ -16,7 +16,7 @@ pub enum MediaLibraryError {
 }
 
 impl error::Error for MediaLibraryError {
-    // This is meant to be a static description of the error, without any dynamic creation.
+    // LEARN: This is meant to be a static description of the error, without any dynamic creation.
     fn description(&self) -> &str {
         match self {
             // &MediaLibraryError::NonAbsPath(_) => "File path was expected to be absolute",
@@ -29,7 +29,7 @@ impl error::Error for MediaLibraryError {
 }
 
 impl fmt::Display for MediaLibraryError {
-    // This is the place to put dynamically-created error messages.
+    // LEARN: This is the place to put dynamically-created error messages.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             // &MediaLibraryError::NonAbsPath(ref p) => write!(f, r##"Path {:?} is not absolute"##, p),
@@ -42,7 +42,7 @@ impl fmt::Display for MediaLibraryError {
 }
 
 impl From<io::Error> for MediaLibraryError {
-    // This makes it easy to compose other error types into our own error type.
+    // LEARN: This makes it easy to compose other error types into our own error type.
     fn from(err: io::Error) -> MediaLibraryError {
         MediaLibraryError::IoError(err)
     }

@@ -50,7 +50,7 @@ pub fn normalize(p: &Path) -> PathBuf {
         }
     }
 
-    // If an empty PathBuf would be return, instead return CurDir ('.').
+    // If an empty PathBuf would be returned, instead return CurDir ('.').
     if stack.is_empty() {
         return PathBuf::from(Component::CurDir.as_ref());
     }

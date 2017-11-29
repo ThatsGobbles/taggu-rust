@@ -110,7 +110,8 @@ pub struct MediaLibrary {
 }
 
 impl MediaLibrary {
-    pub fn new<P: AsRef<Path>, S: AsRef<str>>(root_dir: P,
+    pub fn new<P: AsRef<Path>, S: AsRef<str>>(
+            root_dir: P,
             item_meta_fn: S,
             self_meta_fn: S,
             selection: Selection,
@@ -217,13 +218,7 @@ impl MediaLibrary {
                     }
                 };
             },
-            _ => {
-                let d: Vec<DirEntry> = vec![];
-
-                for x in d {
-                    yield x;
-                };
-            }
+            _ => {}
         };
 
         gen_to_iter(closure)
@@ -263,6 +258,183 @@ impl MediaLibrary {
         gen_to_iter(closure)
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub struct NewMediaLibrary {
+    root_dir: PathBuf,
+    item_meta_fn: String,
+    self_meta_fn: String,
+    selection: Selection,
+    sort_order: SortOrder,
+}
+
+impl NewMediaLibrary {
+    /// Creates a new `NewMediaLibrary`.
+    /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
+    pub fn new<P: Into<PathBuf>, S: Into<String>>(
+            root_dir: P,
+            item_meta_fn: S,
+            self_meta_fn: S,
+            selection: Selection,
+            sort_order: SortOrder,
+            ) -> Result<NewMediaLibrary, MediaLibraryError> {
+        let root_dir = try!(root_dir.into().canonicalize());
+
+        if !root_dir.is_dir() {
+            return Err(MediaLibraryError::NotADir(root_dir))
+        }
+
+        Ok(NewMediaLibrary {
+            root_dir,
+            item_meta_fn: item_meta_fn.into(),
+            self_meta_fn: self_meta_fn.into(),
+            selection,
+            sort_order,
+        })
+    }
+
+    pub fn is_valid_item_name<S: Into<String>>(file_name: S) -> bool {
+        let file_name = file_name.into();
+        let normed = normalize(Path::new(&file_name));
+
+        // A valid item file name will have the same string repr before and after normalization.
+        match normed.to_str() {
+            Some(ns) if ns == file_name => {},
+            _ => { return false },
+        }
+
+        let comps: Vec<_> = normed.components().collect();
+
+        // A valid item file name has only one component, and it must be normal.
+        if comps.len() != 1 {
+            return false
+        }
+
+        match comps[0] {
+            Component::Normal(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_valid_sub_path<P: Into<PathBuf>>(&self, abs_sub_path: P) -> bool {
+        let abs_sub_path = normalize(&abs_sub_path.into());
+
+        abs_sub_path.starts_with(&self.root_dir)
+    }
+
+    pub fn is_selected_media_item<P: Into<PathBuf>>(&self, abs_item_path: P) -> bool {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        self.is_valid_sub_path(&abs_item_path) && NewMediaLibrary::is_media_path(&abs_item_path, &self.selection)
+    }
+
+    pub fn get_contains_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if self.is_valid_sub_path(&abs_item_path) && abs_item_path.is_dir() {
+            return Some(abs_item_path)
+        }
+
+        None
+    }
+
+    pub fn get_siblings_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        // Assume that .parent() returns None if given a root or prefix.
+        if let Some(parent_dir) = abs_item_path.parent() {
+            if self.is_valid_sub_path(&parent_dir) {
+                return Some(parent_dir.to_path_buf())
+            }
+        }
+
+        None
+    }
+
+    pub fn all_entries_in_dir<'a, P: Into<PathBuf> + 'a>(&'a self, abs_sub_dir_path: P) -> impl Iterator<Item = DirEntry> + 'a {
+        let abs_sub_dir_path = normalize(&abs_sub_dir_path.into());
+
+        let closure = move || {
+            // LEARN: Why does this work when separated, but not when inlined?
+            let iter = abs_sub_dir_path.read_dir();
+            if let Ok(dir_entries) = iter {
+                for dir_entry in dir_entries {
+                    if let Ok(dir_entry) = dir_entry {
+                        yield dir_entry;
+                    }
+                }
+            }
+        };
+
+        gen_to_iter(closure)
+    }
+
+    pub fn selected_entries_in_dir<'a, P: Into<PathBuf> + 'a>(&'a self, abs_sub_dir_path: P) -> impl Iterator<Item = DirEntry> + 'a {
+        let abs_sub_dir_path = normalize(&abs_sub_dir_path.into());
+
+        self.all_entries_in_dir(abs_sub_dir_path).filter(move |x| self.is_selected_media_item(x.path()))
+    }
+
+    pub fn sort_entries<I: IntoIterator<Item = DirEntry>>(&self, entries: I) -> Vec<DirEntry> {
+        // LEARN: Why does the commented-out code not work?
+        // let cmp = |a, b| dir_entry_sort_cmp(a, b, &self.sort_order);
+        let mut res: Vec<DirEntry> = entries.into_iter().collect();
+        // res.sort_by(cmp);
+        res.sort_by(|a, b| dir_entry_sort_cmp(a, b, &self.sort_order));
+        res
+    }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Helper methods
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    fn is_media_path<P: Into<PathBuf>>(abs_item_path: P, sel: &Selection) -> bool {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if !abs_item_path.exists() {
+            return false
+        }
+
+        match sel {
+            &Selection::Ext(ref e_ext) => {
+                if let Some(p_ext) = abs_item_path.extension() {
+                    OsString::from(e_ext) == p_ext
+                } else {
+                    false
+                }
+            },
+            &Selection::Regex(ref r_exp) => {
+                let maybe_fn = abs_item_path.file_name().map(|x| x.to_str());
+
+                if let Some(Some(fn_str)) = maybe_fn {
+                    r_exp.is_match(fn_str)
+                } else {
+                    false
+                }
+            },
+            &Selection::IsFile => abs_item_path.is_file(),
+            &Selection::IsDir => abs_item_path.is_dir(),
+            &Selection::And(ref sel_a, ref sel_b) => {
+                NewMediaLibrary::is_media_path(&abs_item_path, &sel_a)
+                && NewMediaLibrary::is_media_path(&abs_item_path, &sel_b)
+            },
+            &Selection::Or(ref sel_a, ref sel_b) => {
+                NewMediaLibrary::is_media_path(&abs_item_path, &sel_a)
+                || NewMediaLibrary::is_media_path(&abs_item_path, &sel_b)
+            },
+            &Selection::Xor(ref sel_a, ref sel_b) => {
+                NewMediaLibrary::is_media_path(&abs_item_path, &sel_a)
+                ^ NewMediaLibrary::is_media_path(&abs_item_path, &sel_b)
+            },
+            &Selection::Not(ref sel) => !NewMediaLibrary::is_media_path(&abs_item_path, &sel),
+            &Selection::True => true,
+            &Selection::False => false,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub fn example() {
     // let selection = Selection::Or(
