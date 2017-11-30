@@ -1,5 +1,6 @@
 #![feature(conservative_impl_trait)]
 #![feature(generators, generator_trait)]
+#![feature(type_ascription)]
 
 extern crate tempdir;
 extern crate regex;
@@ -15,7 +16,4 @@ mod metadata;
 mod plexer;
 mod discovery;
 
-fn main() {
-    library::example();
-    // metadata::example();
-}
+fn main() {}
