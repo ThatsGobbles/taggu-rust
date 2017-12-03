@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::path::Component;
 use std::ffi::OsString;
 use std::fs::DirEntry;
@@ -10,7 +9,6 @@ use regex::Regex;
 
 use error::MediaLibraryError;
 use path::normalize;
-use metadata::MetaBlock;
 
 use generator::gen_to_iter;
 
@@ -32,6 +30,27 @@ pub enum SortOrder {
     Name,
     ModTime,
 }
+
+pub enum MetaTarget {
+    Alongside,
+    Container,
+}
+
+impl MetaTarget {
+    pub fn priority_order<'a>() -> impl Iterator<Item = MetaTarget> + 'a {
+        gen_to_iter(|| {
+            yield MetaTarget::Container;
+            yield MetaTarget::Alongside;
+        })
+    }
+}
+
+// pub struct MediaLibrary {
+//     root_dir: PathBuf,
+//     meta_targets: Vec<MetaTarget>,
+//     selection: Selection,
+//     sort_order: SortOrder,
+// }
 
 pub struct MediaLibrary {
     root_dir: PathBuf,
@@ -151,6 +170,36 @@ impl MediaLibrary {
         res
     }
 
+    pub fn get_meta_file_name(&self, mt: &MetaTarget) -> &String {
+        match *mt {
+            MetaTarget::Alongside => &self.item_meta_fn,
+            MetaTarget::Container => &self.self_meta_fn,
+        }
+    }
+
+    pub fn get_target_meta_dir<P: Into<PathBuf>>(&self, abs_item_path: P, mt: &MetaTarget) -> Option<PathBuf> {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if self.is_proper_sub_path(&abs_item_path) && abs_item_path.exists() {
+            match *mt {
+                MetaTarget::Container => {
+                    if abs_item_path.is_dir() {
+                        return Some(abs_item_path)
+                    }
+                },
+                MetaTarget::Alongside => {
+                    if let Some(parent_dir) = abs_item_path.parent() {
+                        if self.is_proper_sub_path(&parent_dir) {
+                            return Some(parent_dir.to_path_buf())
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
 // *************************************************************************************************
 // Associated functions
 // *************************************************************************************************
@@ -256,13 +305,51 @@ impl MediaLibrary {
 #[cfg(test)]
 mod tests {
     use super::{MediaLibrary, SortOrder, Selection};
-    use std::path::PathBuf;
+    use std::path::{PathBuf, Path};
     use tempdir::TempDir;
     use std::fs::{File, DirBuilder};
     use regex::Regex;
-    use std::thread::sleep;
-    use std::time::Duration;
     use std::collections::HashSet;
+
+    enum TP {
+        F(PathBuf),
+        D(PathBuf),
+    }
+
+    impl TP {
+        fn create(&self) {
+            let mut db = DirBuilder::new();
+            db.recursive(true);
+
+            match self {
+                &TP::F(ref p) => {
+                    if let Some(parent) = p.parent() {
+                        db.create(parent).unwrap();
+                    }
+                    File::create(p).unwrap();
+                },
+                &TP::D(ref p) => { db.create(p).unwrap(); },
+            }
+        }
+
+        fn to_path_buf(&self) -> PathBuf {
+            match self {
+                &TP::F(ref p) => p.clone(),
+                &TP::D(ref p) => p.clone(),
+            }
+        }
+
+        fn is_file(&self) -> bool {
+            match self {
+                &TP::F(_) => true,
+                _ => false,
+            }
+        }
+
+        fn is_dir(&self) -> bool {
+            !self.is_file()
+        }
+    }
 
 // *************************************************************************************************
 // Methods
@@ -398,8 +485,32 @@ mod tests {
     #[test]
     fn test_all_entries_in_dir() {
         // Create temp directory.
-        let temp = TempDir::new("test_get_siblings_dir").unwrap();
+        let temp = TempDir::new("test_all_entries_in_dir").unwrap();
         let tp = temp.path();
+
+        // let paths_to_create = vec![
+        //     tp.join("file_a.flac"),
+        //     tp.join("file_b.flac"),
+        //     tp.join("file_c.flac"),
+        //     tp.join("file_d.yml"),
+        //     tp.join("file_e.jpg"),
+        // ];
+
+        // for path_to_create in &paths_to_create {
+        //     File::create(&path_to_create).unwrap();
+        // }
+
+        let paths_to_create = vec![
+            TP::F(tp.join("file_a.flac")),
+            TP::F(tp.join("file_b.flac")),
+            TP::F(tp.join("file_c.flac")),
+            TP::F(tp.join("file_d.yml")),
+            TP::F(tp.join("file_e.jpg")),
+        ];
+
+        for path_to_create in &paths_to_create {
+            path_to_create.create();
+        }
 
         let ml = MediaLibrary::new(
             tp,
@@ -409,21 +520,75 @@ mod tests {
             SortOrder::Name,
         ).unwrap();
 
+        let expected: HashSet<PathBuf> = paths_to_create.iter().map(|fp| fp.to_path_buf()).collect();
+        let produced: HashSet<PathBuf> = ml.all_entries_in_dir(tp).map(|e| e.path().to_path_buf()).collect();
+
+        assert_eq!(expected, produced);
+    }
+
+    #[test]
+    fn test_selected_entries_in_dir() {
+        // Create temp directory.
+        let temp = TempDir::new("test_selected_entries_in_dir").unwrap();
+        let tp = temp.path();
+
         let paths_to_create = vec![
-            tp.join("a"),
-            tp.join("b"),
-            tp.join("c"),
-            tp.join("d"),
-            tp.join("e"),
+            TP::F(tp.join("file_a.flac")),
+            TP::F(tp.join("file_b.flac")),
+            TP::F(tp.join("file_c.flac")),
+            TP::D(tp.join("sub")),
+            TP::F(tp.join("file_d.yml")),
+            TP::F(tp.join("file_e.jpg")),
         ];
 
-        let expected: HashSet<PathBuf> = paths_to_create.iter().cloned().collect();
-
         for path_to_create in &paths_to_create {
-            File::create(&path_to_create).unwrap();
+            path_to_create.create();
         }
 
-        let produced: HashSet<PathBuf> = ml.all_entries_in_dir(tp).map(|e| e.path().to_path_buf()).collect();
+        let ml = MediaLibrary::new(
+            tp,
+            "item_meta.yml",
+            "self_meta.yml",
+            Selection::True,
+            SortOrder::Name,
+        ).unwrap();
+
+        let expected: HashSet<PathBuf> = paths_to_create.iter().map(|fp| fp.to_path_buf()).collect();
+        let produced: HashSet<PathBuf> = ml.selected_entries_in_dir(tp).map(|e| e.path().to_path_buf()).collect();
+
+        assert_eq!(expected, produced);
+
+        let ml = MediaLibrary::new(
+            tp,
+            "item_meta.yml",
+            "self_meta.yml",
+            Selection::Ext("flac".to_string()),
+            SortOrder::Name,
+        ).unwrap();
+
+        let expected: HashSet<PathBuf> = paths_to_create.iter().take(3).map(|fp| fp.to_path_buf()).collect();
+        let produced: HashSet<PathBuf> = ml.selected_entries_in_dir(tp).map(|e| e.path().to_path_buf()).collect();
+
+        assert_eq!(expected, produced);
+
+        let ml = MediaLibrary::new(
+            tp,
+            "item_meta.yml",
+            "self_meta.yml",
+            Selection::Or(
+                Box::new(Selection::IsDir),
+                Box::new(
+                    Selection::And(
+                        Box::new(Selection::IsFile),
+                        Box::new(Selection::Ext("flac".to_string())),
+                    ),
+                ),
+            ),
+            SortOrder::Name,
+        ).unwrap();
+
+        let expected: HashSet<PathBuf> = paths_to_create.iter().take(4).map(|fp| fp.to_path_buf()).collect();
+        let produced: HashSet<PathBuf> = ml.selected_entries_in_dir(tp).map(|e| e.path().to_path_buf()).collect();
 
         assert_eq!(expected, produced);
     }
