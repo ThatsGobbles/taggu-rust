@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use yaml_rust::{YamlLoader, YamlEmitter, Yaml};
+use yaml_rust::{YamlLoader, Yaml};
 
 use error::YamlError;
 

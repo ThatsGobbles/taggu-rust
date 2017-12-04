@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use library::{MetaTarget, MediaLibrary};
+use library::{MediaLibrary};
 use metadata::MetaBlock;
 use generator::gen_to_iter;
 

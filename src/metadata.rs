@@ -1,10 +1,6 @@
-use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 
 use yaml_rust::Yaml;
-
-use generator::gen_to_iter;
-// use library::{MediaLibrary, SortOrder, Selection};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum MetaKey {
@@ -178,7 +174,7 @@ mod tests {
         yaml_as_meta_value,
         yaml_as_meta_block,
     };
-    use yaml_rust::{Yaml, YamlLoader};
+    use yaml_rust::{YamlLoader};
 
     #[test]
     fn test_yaml_as_string() {

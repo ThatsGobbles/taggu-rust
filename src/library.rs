@@ -26,36 +26,90 @@ pub enum Selection {
     False,
 }
 
+impl Selection {
+    fn is_selected_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> bool {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if !abs_item_path.exists() {
+            return false
+        }
+
+        match *self {
+            Selection::Ext(ref e_ext) => {
+                if let Some(p_ext) = abs_item_path.extension() {
+                    OsString::from(e_ext) == p_ext
+                } else {
+                    false
+                }
+            },
+            Selection::Regex(ref r_exp) => {
+                let maybe_fn = abs_item_path.file_name().and_then(|x| x.to_str());
+
+                if let Some(fn_str) = maybe_fn {
+                    r_exp.is_match(fn_str)
+                } else {
+                    false
+                }
+            },
+            Selection::IsFile => abs_item_path.is_file(),
+            Selection::IsDir => abs_item_path.is_dir(),
+            Selection::And(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
+                && sel_b.is_selected_path(&abs_item_path),
+            Selection::Or(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
+                || sel_b.is_selected_path(&abs_item_path),
+            Selection::Xor(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
+                ^ sel_b.is_selected_path(&abs_item_path),
+            Selection::Not(ref sel) => !sel.is_selected_path(&abs_item_path),
+            Selection::True => true,
+            Selection::False => false,
+        }
+    }
+}
+
 pub enum SortOrder {
     Name,
     ModTime,
 }
 
 pub enum MetaTarget {
-    Alongside,
-    Container,
+    Alongside(String),
+    Container(String),
 }
 
 impl MetaTarget {
-    pub fn priority_order<'a>() -> impl Iterator<Item = MetaTarget> + 'a {
-        gen_to_iter(|| {
-            yield MetaTarget::Container;
-            yield MetaTarget::Alongside;
-        })
+    pub fn meta_file_name(&self) -> &String {
+        match *self {
+            MetaTarget::Alongside(ref x) => x,
+            MetaTarget::Container(ref x) => x,
+        }
+    }
+
+    pub fn target_dir_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if !abs_item_path.exists() {
+            return None
+        }
+
+        match *self {
+            MetaTarget::Alongside(_) => abs_item_path.parent().map(|f| f.to_path_buf()),
+            MetaTarget::Container(_) => {
+                if abs_item_path.is_dir() { Some(abs_item_path) }
+                else { None }
+            },
+        }
+    }
+
+    pub fn meta_file_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        self.target_dir_path(abs_item_path)
+            .map(|f| f.join(self.meta_file_name()))
+            .and_then(|f| if f.is_file() { Some(f) } else { None })
     }
 }
 
-// pub struct MediaLibrary {
-//     root_dir: PathBuf,
-//     meta_targets: Vec<MetaTarget>,
-//     selection: Selection,
-//     sort_order: SortOrder,
-// }
-
 pub struct MediaLibrary {
     root_dir: PathBuf,
-    item_meta_fn: String,
-    self_meta_fn: String,
+    meta_targets: Vec<MetaTarget>,
     selection: Selection,
     sort_order: SortOrder,
 }
@@ -68,10 +122,9 @@ impl MediaLibrary {
 
     /// Creates a new `MediaLibrary`.
     /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
-    pub fn new<P: Into<PathBuf>, S: Into<String>>(
+    pub fn new<P: Into<PathBuf>>(
             root_dir: P,
-            item_meta_fn: S,
-            self_meta_fn: S,
+            meta_targets: Vec<MetaTarget>,
             selection: Selection,
             sort_order: SortOrder,
             ) -> Result<MediaLibrary, MediaLibraryError> {
@@ -83,8 +136,7 @@ impl MediaLibrary {
 
         Ok(MediaLibrary {
             root_dir,
-            item_meta_fn: item_meta_fn.into(),
-            self_meta_fn: self_meta_fn.into(),
+            meta_targets,
             selection,
             sort_order,
         })
@@ -102,40 +154,40 @@ impl MediaLibrary {
         self.is_proper_sub_path(&abs_item_path) && MediaLibrary::is_media_path(&abs_item_path, &self.selection)
     }
 
-    /// Returns the 'contains' directory path, if any, for a given item path.
-    /// An item path has a 'contains' directory path if ALL of the following apply:
-    /// 1) The item path is a proper subpath.
-    /// 2) The item path points to an existing directory.
-    pub fn get_contains_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
-        let abs_item_path = normalize(&abs_item_path.into());
+    // /// Returns the 'contains' directory path, if any, for a given item path.
+    // /// An item path has a 'contains' directory path if ALL of the following apply:
+    // /// 1) The item path is a proper subpath.
+    // /// 2) The item path points to an existing directory.
+    // pub fn get_contains_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+    //     let abs_item_path = normalize(&abs_item_path.into());
 
-        if self.is_proper_sub_path(&abs_item_path) && abs_item_path.is_dir() {
-            return Some(abs_item_path)
-        }
+    //     if self.is_proper_sub_path(&abs_item_path) && abs_item_path.is_dir() {
+    //         return Some(abs_item_path)
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
-    /// Returns the 'siblings' directory path, if any, for a given item path.
-    /// An item path has a 'siblings' directory path if ALL of the following apply:
-    /// 1) The item path is a proper subpath.
-    /// 2) The item path exists.
-    /// 3) The item path has a valid parent directory.
-    /// 4) The item path's parent directory is a proper subpath.
-    pub fn get_siblings_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
-        let abs_item_path = normalize(&abs_item_path.into());
+    // /// Returns the 'siblings' directory path, if any, for a given item path.
+    // /// An item path has a 'siblings' directory path if ALL of the following apply:
+    // /// 1) The item path is a proper subpath.
+    // /// 2) The item path exists.
+    // /// 3) The item path has a valid parent directory.
+    // /// 4) The item path's parent directory is a proper subpath.
+    // pub fn get_siblings_dir<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+    //     let abs_item_path = normalize(&abs_item_path.into());
 
-        if self.is_proper_sub_path(&abs_item_path) && abs_item_path.exists() {
-            // Assume that .parent() returns None if given a root or prefix.
-            if let Some(parent_dir) = abs_item_path.parent() {
-                if self.is_proper_sub_path(&parent_dir) {
-                    return Some(parent_dir.to_path_buf())
-                }
-            }
-        }
+    //     if self.is_proper_sub_path(&abs_item_path) && abs_item_path.exists() {
+    //         // Assume that .parent() returns None if given a root or prefix.
+    //         if let Some(parent_dir) = abs_item_path.parent() {
+    //             if self.is_proper_sub_path(&parent_dir) {
+    //                 return Some(parent_dir.to_path_buf())
+    //             }
+    //         }
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     pub fn all_entries_in_dir<'a, P: Into<PathBuf> + 'a>(&'a self, abs_sub_dir_path: P) -> impl Iterator<Item = DirEntry> + 'a {
         let abs_sub_dir_path = normalize(&abs_sub_dir_path.into());
@@ -170,34 +222,57 @@ impl MediaLibrary {
         res
     }
 
-    pub fn get_meta_file_name(&self, mt: &MetaTarget) -> &String {
-        match *mt {
-            MetaTarget::Alongside => &self.item_meta_fn,
-            MetaTarget::Container => &self.self_meta_fn,
-        }
-    }
-
     pub fn get_target_meta_dir<P: Into<PathBuf>>(&self, abs_item_path: P, mt: &MetaTarget) -> Option<PathBuf> {
         let abs_item_path = normalize(&abs_item_path.into());
 
-        if self.is_proper_sub_path(&abs_item_path) && abs_item_path.exists() {
-            match *mt {
-                MetaTarget::Container => {
-                    if abs_item_path.is_dir() {
-                        return Some(abs_item_path)
-                    }
-                },
-                MetaTarget::Alongside => {
-                    if let Some(parent_dir) = abs_item_path.parent() {
-                        if self.is_proper_sub_path(&parent_dir) {
-                            return Some(parent_dir.to_path_buf())
-                        }
-                    }
-                }
-            }
+        if !self.is_proper_sub_path(&abs_item_path) {
+            return None
         }
 
-        None
+        mt.target_dir_path(&abs_item_path).and_then(|f| if self.is_proper_sub_path(&f) { Some(f) } else { None })
+    }
+
+    pub fn meta_fps_from_item_fp<'a, P: Into<PathBuf> + 'a>(&'a self, abs_item_path: P) -> impl Iterator<Item = &'a Path> + 'a {
+        // meta_specs: tt.MetaSourceSpecGen = library_context.yield_meta_source_specs()
+        // for meta_spec in meta_specs:
+        //     meta_file_name: pl.Path = meta_spec.meta_file_name
+        //     dir_getter: tt.DirGetter = meta_spec.dir_getter
+
+        //     # This loop will normally execute either zero or one time.
+        //     for rel_meta_dir in dir_getter(rel_item_path):
+        //         rel_meta_dir, abs_meta_dir = library_context.co_norm(rel_sub_path=rel_meta_dir)
+
+        //         rel_meta_path = rel_meta_dir / meta_file_name
+        //         abs_meta_path = abs_meta_dir / meta_file_name
+
+        //         if abs_meta_path.is_file():
+        //             logger.info(f'Found meta file "{rel_meta_path}" for item "{rel_item_path}"')
+        //             yield rel_meta_path
+        //         else:
+        //             logger.debug(f'Meta file "{rel_meta_path}" does not exist for item "{rel_item_path}"')
+
+        // yield tt.MetaSourceSpec(meta_file_name=pl.Path(cls.get_self_meta_file_name()),
+        //                         dir_getter=cls.yield_contains_dir,
+        //                         multiplexer=cls.yield_self_meta_pairs)
+        // yield tt.MetaSourceSpec(meta_file_name=pl.Path(cls.get_item_meta_file_name()),
+        //                         dir_getter=cls.yield_siblings_dir,
+        //                         multiplexer=cls.yield_item_meta_pairs)
+
+        // TODO: CONTINUE HERE!
+
+        let closure = move || {
+            if false {
+                yield Path::new("foo.txt")
+            }
+
+            for meta_target in &self.meta_targets {
+                match *meta_target {
+                    MetaTarget::Alongside(ref f_name) => {},
+                    MetaTarget::Container(ref f_name) => {},
+                }
+            }
+        };
+        gen_to_iter(closure)
     }
 
 // *************************************************************************************************
@@ -228,6 +303,7 @@ impl MediaLibrary {
     }
 
     fn is_media_path<P: Into<PathBuf>>(abs_item_path: P, sel: &Selection) -> bool {
+        // TODO: Move this into impl for Selection enum!
         let abs_item_path = normalize(&abs_item_path.into());
 
         if !abs_item_path.exists() {
@@ -305,7 +381,7 @@ impl MediaLibrary {
 #[cfg(test)]
 mod tests {
     use super::{MediaLibrary, SortOrder, Selection};
-    use std::path::{PathBuf, Path};
+    use std::path::{PathBuf};
     use tempdir::TempDir;
     use std::fs::{File, DirBuilder};
     use regex::Regex;
@@ -363,8 +439,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             tp,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::True,
             SortOrder::Name,
         ).unwrap();
@@ -387,118 +462,104 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_get_contains_dir() {
-        // Create temp directory.
-        let temp = TempDir::new("test_get_contains_dir").unwrap();
-        let tp = temp.path();
+    // #[test]
+    // fn test_get_contains_dir() {
+    //     // Create temp directory.
+    //     let temp = TempDir::new("test_get_contains_dir").unwrap();
+    //     let tp = temp.path();
 
-        let ml = MediaLibrary::new(
-            tp,
-            "item_meta.yml",
-            "self_meta.yml",
-            Selection::True,
-            SortOrder::Name,
-        ).unwrap();
+    //     let ml = MediaLibrary::new(
+    //         tp,
+    //         vec![],
+    //         Selection::True,
+    //         SortOrder::Name,
+    //     ).unwrap();
 
-        // Generate desired file and dir paths.
-        let fns = vec!["a", "b", "c"];
+    //     // Generate desired file and dir paths.
+    //     let fns = vec!["a", "b", "c"];
 
-        let db = DirBuilder::new();
+    //     let db = DirBuilder::new();
 
-        let mut inputs_and_expected: Vec<(PathBuf, Option<PathBuf>)> = vec![
-            (tp.to_path_buf(), Some(tp.to_path_buf())),
-        ];
+    //     let mut inputs_and_expected: Vec<(PathBuf, Option<PathBuf>)> = vec![
+    //         (tp.to_path_buf(), Some(tp.to_path_buf())),
+    //     ];
 
-        let mut curr_dir: PathBuf = tp.to_path_buf();
-        for _ in (0..3) {
-            // Create files in current directory.
-            for f in &fns {
-                let curr_f = curr_dir.join(f);
-                File::create(&curr_f).unwrap();
-                inputs_and_expected.push((curr_f, None));
-            }
+    //     let mut curr_dir: PathBuf = tp.to_path_buf();
+    //     for _ in 0..3 {
+    //         // Create files in current directory.
+    //         for f in &fns {
+    //             let curr_f = curr_dir.join(f);
+    //             File::create(&curr_f).unwrap();
+    //             inputs_and_expected.push((curr_f, None));
+    //         }
 
-            // Create the next directory.
-            curr_dir = curr_dir.join("sub");
-            db.create(&curr_dir);
-            inputs_and_expected.push((curr_dir.clone(), Some(curr_dir.clone())));
-        }
+    //         // Create the next directory.
+    //         curr_dir = curr_dir.join("sub");
+    //         db.create(&curr_dir).unwrap();
+    //         inputs_and_expected.push((curr_dir.clone(), Some(curr_dir.clone())));
+    //     }
 
-        inputs_and_expected.push((tp.join("DOES_NOT_EXIST"), None));
+    //     inputs_and_expected.push((tp.join("DOES_NOT_EXIST"), None));
 
-        for (input, expected) in inputs_and_expected {
-            let produced = ml.get_contains_dir(&input);
-            assert_eq!(expected, produced);
-        }
-    }
+    //     for (input, expected) in inputs_and_expected {
+    //         let produced = ml.get_contains_dir(&input);
+    //         assert_eq!(expected, produced);
+    //     }
+    // }
 
-    #[test]
-    fn test_get_siblings_dir() {
-        // Create temp directory.
-        let temp = TempDir::new("test_get_siblings_dir").unwrap();
-        let tp = temp.path();
+    // #[test]
+    // fn test_get_siblings_dir() {
+    //     // Create temp directory.
+    //     let temp = TempDir::new("test_get_siblings_dir").unwrap();
+    //     let tp = temp.path();
 
-        let ml = MediaLibrary::new(
-            tp,
-            "item_meta.yml",
-            "self_meta.yml",
-            Selection::True,
-            SortOrder::Name,
-        ).unwrap();
+    //     let ml = MediaLibrary::new(
+    //         tp,
+    //         vec![],
+    //         Selection::True,
+    //         SortOrder::Name,
+    //     ).unwrap();
 
-        // Generate desired file and dir paths.
-        let fns = vec!["a", "b", "c"];
+    //     // Generate desired file and dir paths.
+    //     let fns = vec!["a", "b", "c"];
 
-        let db = DirBuilder::new();
+    //     let db = DirBuilder::new();
 
-        let mut inputs_and_expected: Vec<(PathBuf, Option<PathBuf>)> = vec![
-            (tp.to_path_buf(), None),
-        ];
+    //     let mut inputs_and_expected: Vec<(PathBuf, Option<PathBuf>)> = vec![
+    //         (tp.to_path_buf(), None),
+    //     ];
 
-        let mut curr_dir: PathBuf = tp.to_path_buf();
-        for _ in (0..3) {
-            // Create files in current directory.
-            for f in &fns {
-                let curr_f = curr_dir.join(f);
-                File::create(&curr_f).unwrap();
-                inputs_and_expected.push(
-                    (curr_f, Some(curr_dir.to_path_buf()))
-                );
-            }
+    //     let mut curr_dir: PathBuf = tp.to_path_buf();
+    //     for _ in 0..3 {
+    //         // Create files in current directory.
+    //         for f in &fns {
+    //             let curr_f = curr_dir.join(f);
+    //             File::create(&curr_f).unwrap();
+    //             inputs_and_expected.push(
+    //                 (curr_f, Some(curr_dir.to_path_buf()))
+    //             );
+    //         }
 
-            // Create the next directory.
-            let old_dir = curr_dir.to_path_buf();
-            curr_dir = curr_dir.join("sub");
-            db.create(&curr_dir);
-            inputs_and_expected.push((curr_dir.to_path_buf(), Some(old_dir)));
-        }
+    //         // Create the next directory.
+    //         let old_dir = curr_dir.to_path_buf();
+    //         curr_dir = curr_dir.join("sub");
+    //         db.create(&curr_dir).unwrap();
+    //         inputs_and_expected.push((curr_dir.to_path_buf(), Some(old_dir)));
+    //     }
 
-        inputs_and_expected.push((tp.join("DOES_NOT_EXIST"), None));
+    //     inputs_and_expected.push((tp.join("DOES_NOT_EXIST"), None));
 
-        for (input, expected) in inputs_and_expected {
-            let produced = ml.get_siblings_dir(&input);
-            assert_eq!(expected, produced);
-        }
-    }
+    //     for (input, expected) in inputs_and_expected {
+    //         let produced = ml.get_siblings_dir(&input);
+    //         assert_eq!(expected, produced);
+    //     }
+    // }
 
     #[test]
     fn test_all_entries_in_dir() {
         // Create temp directory.
         let temp = TempDir::new("test_all_entries_in_dir").unwrap();
         let tp = temp.path();
-
-        // let paths_to_create = vec![
-        //     tp.join("file_a.flac"),
-        //     tp.join("file_b.flac"),
-        //     tp.join("file_c.flac"),
-        //     tp.join("file_d.yml"),
-        //     tp.join("file_e.jpg"),
-        // ];
-
-        // for path_to_create in &paths_to_create {
-        //     File::create(&path_to_create).unwrap();
-        // }
 
         let paths_to_create = vec![
             TP::F(tp.join("file_a.flac")),
@@ -514,8 +575,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             tp,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::True,
             SortOrder::Name,
         ).unwrap();
@@ -547,8 +607,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             tp,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::True,
             SortOrder::Name,
         ).unwrap();
@@ -560,8 +619,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             tp,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::Ext("flac".to_string()),
             SortOrder::Name,
         ).unwrap();
@@ -573,8 +631,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             tp,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::Or(
                 Box::new(Selection::IsDir),
                 Box::new(
@@ -610,8 +667,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             dir_path,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::True,
             SortOrder::Name,
         );
@@ -622,8 +678,7 @@ mod tests {
 
         let ml = MediaLibrary::new(
             dir_path,
-            "item_meta.yml",
-            "self_meta.yml",
+            vec![],
             Selection::True,
             SortOrder::Name,
         );
