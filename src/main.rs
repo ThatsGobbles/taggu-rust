@@ -6,6 +6,7 @@ extern crate tempdir;
 extern crate regex;
 extern crate yaml_rust;
 #[macro_use] extern crate maplit;
+#[macro_use] extern crate log;
 
 mod library;
 mod error;
