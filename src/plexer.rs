@@ -6,6 +6,8 @@ use std::collections::HashSet;
 use yaml_rust::{Yaml};
 
 use library::{MediaLibrary, MetaTarget};
+use library::selection::Selection;
+use library::sort_order::SortOrder;
 use generator::gen_to_iter;
 use metadata::{
     MetaBlock,
@@ -16,7 +18,9 @@ use metadata::{
 use yaml::read_yaml_file;
 
 // TODO: Refactor out reference to MediaLibrary!
-pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a MetaTarget, media_lib: &'a MediaLibrary) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
+// TODO: Add selection logic (selected_entries_in_dir) to Selection, and pass in &Selection instead.
+// TODO: Add sorting logic (sort_entries) to SortOrder, and pass in &SortOrder instead.
+pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a MetaTarget, selection: &'a Selection, sort_order: &'a SortOrder) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
     // Assume meta file path exists, and is a proper subpath.
     // We also assume that the meta path filename matches the meta target type.
     let closure = move || {
@@ -38,8 +42,9 @@ pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a Met
 
                         // Create a mutable set of item names found in this directory.
                         let mut selected_items: HashSet<String> = {
-                            media_lib
+                            selection
                             .selected_entries_in_dir(&working_dir_path)
+                            .iter()
                             .filter_map(|e| {
                                 e.path()
                                 .file_name()
@@ -71,16 +76,24 @@ pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a Met
                         if let Some(isd) = temp {
                             // Metadata is a sequence of meta blocks.
                             // Each should correspond one-to-one with a valid item in the working dir.
-                            let sorted_selected_items = media_lib.sort_entries(media_lib.selected_entries_in_dir(&working_dir_path));
+                            let mut selected_item_paths: Vec<PathBuf> = {
+                                selection
+                                .selected_entries_in_dir(&working_dir_path)
+                                .iter()
+                                .map(|e| e.path())
+                                .collect()
+                            };
+                            selected_item_paths.sort_unstable_by(|a, b| sort_order.path_sort_cmp(a, b));
 
-                            if isd.len() != sorted_selected_items.len() {
+                            let sorted_selected_item_paths = selected_item_paths;
+
+                            if isd.len() != sorted_selected_item_paths.len() {
                                 warn!("Lengths do not match!");
                             }
 
-                            for (item_dir_entry, mb) in sorted_selected_items.into_iter().zip(isd) {
+                            for (item_file_path, mb) in sorted_selected_item_paths.into_iter().zip(isd) {
                                 // No need to check if item file path exists,
                                 // since it was returned by directory iteration.
-                                let item_file_path = item_dir_entry.path().to_path_buf();
                                 yield (item_file_path, mb)
                             }
                         }

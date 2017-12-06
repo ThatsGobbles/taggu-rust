@@ -1,3 +1,6 @@
+pub mod selection;
+pub mod sort_order;
+
 use std::path::{Path, PathBuf};
 use std::path::Component;
 use std::ffi::OsString;
@@ -7,70 +10,13 @@ use std::time::SystemTime;
 
 use regex::Regex;
 
-use error::MediaLibraryError;
-use path::normalize;
-use metadata::MetaBlock;
+use super::error::MediaLibraryError;
+use super::path::normalize;
+use super::metadata::MetaBlock;
+use super::generator::gen_to_iter;
 
-use generator::gen_to_iter;
-
-#[derive(Debug)]
-pub enum Selection {
-    Ext(String),
-    Regex(Regex),
-    IsFile,
-    IsDir,
-    And(Box<Selection>, Box<Selection>),
-    Or(Box<Selection>, Box<Selection>),
-    Xor(Box<Selection>, Box<Selection>),
-    Not(Box<Selection>),
-    True,
-    False,
-}
-
-impl Selection {
-    fn is_selected_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> bool {
-        let abs_item_path = normalize(&abs_item_path.into());
-
-        if !abs_item_path.exists() {
-            return false
-        }
-
-        match *self {
-            Selection::Ext(ref e_ext) => {
-                if let Some(p_ext) = abs_item_path.extension() {
-                    OsString::from(e_ext) == p_ext
-                } else {
-                    false
-                }
-            },
-            Selection::Regex(ref r_exp) => {
-                let maybe_fn = abs_item_path.file_name().and_then(|x| x.to_str());
-
-                if let Some(fn_str) = maybe_fn {
-                    r_exp.is_match(fn_str)
-                } else {
-                    false
-                }
-            },
-            Selection::IsFile => abs_item_path.is_file(),
-            Selection::IsDir => abs_item_path.is_dir(),
-            Selection::And(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
-                && sel_b.is_selected_path(&abs_item_path),
-            Selection::Or(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
-                || sel_b.is_selected_path(&abs_item_path),
-            Selection::Xor(ref sel_a, ref sel_b) => sel_a.is_selected_path(&abs_item_path)
-                ^ sel_b.is_selected_path(&abs_item_path),
-            Selection::Not(ref sel) => !sel.is_selected_path(&abs_item_path),
-            Selection::True => true,
-            Selection::False => false,
-        }
-    }
-}
-
-pub enum SortOrder {
-    Name,
-    ModTime,
-}
+use self::selection::Selection;
+use self::sort_order::SortOrder;
 
 pub enum MetaTarget {
     // TODO: Ensure that the file names are simple and do not contain any dot-refs or slashes.
@@ -178,14 +124,14 @@ impl MediaLibrary {
         self.all_entries_in_dir(abs_sub_dir_path).filter(move |x| self.is_selected_media_item(x.path()))
     }
 
-    pub fn sort_entries<I: IntoIterator<Item = DirEntry>>(&self, entries: I) -> Vec<DirEntry> {
-        // LEARN: Why does the commented-out code not work?
-        // let cmp = |a, b| dir_entry_sort_cmp(a, b, &self.sort_order);
-        let mut res: Vec<DirEntry> = entries.into_iter().collect();
-        // res.sort_by(cmp);
-        res.sort_by(|a, b| MediaLibrary::dir_entry_sort_cmp(a, b, &self.sort_order));
-        res
-    }
+    // pub fn sort_entries<I: IntoIterator<Item = DirEntry>>(&self, entries: I) -> Vec<DirEntry> {
+    //     // LEARN: Why does the commented-out code not work?
+    //     // let cmp = |a, b| dir_entry_sort_cmp(a, b, &self.sort_order);
+    //     let mut res: Vec<DirEntry> = entries.into_iter().collect();
+    //     // res.sort_by(cmp);
+    //     res.sort_by(|a, b| MediaLibrary::dir_entry_sort_cmp(a, b, &self.sort_order));
+    //     res
+    // }
 
     pub fn meta_fps_from_item_fp<'a, P: Into<PathBuf> + 'a>(&'a self, abs_item_path: P) -> impl Iterator<Item = PathBuf> + 'a {
         let abs_item_path = normalize(&abs_item_path.into());
@@ -262,35 +208,24 @@ impl MediaLibrary {
         }
     }
 
-    fn get_mtime<P: Into<PathBuf>>(abs_path: P) -> Option<SystemTime> {
-        let abs_path = abs_path.into();
-        if let Ok(metadata) = abs_path.metadata() {
-            if let Ok(mtime) = metadata.modified() {
-                return Some(mtime)
-            }
-        }
+    // fn path_sort_cmp<P: Into<PathBuf>>(abs_item_path_a: P, abs_item_path_b: P, sort_ord: &SortOrder) -> Ordering {
+    //     let abs_item_path_a = abs_item_path_a.into();
+    //     let abs_item_path_b = abs_item_path_b.into();
 
-        None
-    }
+    //     match sort_ord {
+    //         &SortOrder::Name => abs_item_path_a.file_name().cmp(&abs_item_path_b.file_name()),
+    //         &SortOrder::ModTime => {
+    //             let m_time_a = MediaLibrary::get_mtime(abs_item_path_a);
+    //             let m_time_b = MediaLibrary::get_mtime(abs_item_path_b);
 
-    fn path_sort_cmp<P: Into<PathBuf>>(abs_item_path_a: P, abs_item_path_b: P, sort_ord: &SortOrder) -> Ordering {
-        let abs_item_path_a = abs_item_path_a.into();
-        let abs_item_path_b = abs_item_path_b.into();
+    //             m_time_a.cmp(&m_time_b)
+    //         },
+    //     }
+    // }
 
-        match sort_ord {
-            &SortOrder::Name => abs_item_path_a.file_name().cmp(&abs_item_path_b.file_name()),
-            &SortOrder::ModTime => {
-                let m_time_a = MediaLibrary::get_mtime(abs_item_path_a);
-                let m_time_b = MediaLibrary::get_mtime(abs_item_path_b);
-
-                m_time_a.cmp(&m_time_b)
-            },
-        }
-    }
-
-    fn dir_entry_sort_cmp(dir_entry_a: &DirEntry, dir_entry_b: &DirEntry, sort_ord: &SortOrder) -> Ordering {
-        MediaLibrary::path_sort_cmp(dir_entry_a.path(), dir_entry_b.path(), &sort_ord)
-    }
+    // fn dir_entry_sort_cmp(dir_entry_a: &DirEntry, dir_entry_b: &DirEntry, sort_ord: &SortOrder) -> Ordering {
+    //     MediaLibrary::path_sort_cmp(dir_entry_a.path(), dir_entry_b.path(), &sort_ord)
+    // }
 }
 
 // =================================================================================================
@@ -344,7 +279,8 @@ mod tests {
     }
 
     mod media_library {
-        use super::super::{MediaLibrary, SortOrder, Selection};
+        use super::super::{MediaLibrary, SortOrder};
+        use super::super::selection::Selection;
         use std::path::{PathBuf};
         use tempdir::TempDir;
         use std::fs::{File, DirBuilder};
@@ -717,26 +653,6 @@ mod tests {
         //         }
         //     }
         // }
-
-        #[test]
-        fn test_get_mtime() {
-            // Create temp directory.
-            let temp = TempDir::new("test_get_mtime").unwrap();
-            let tp = temp.path();
-
-            // Create and test temp files and directories.
-            let db = DirBuilder::new();
-
-            let path = tp.join("file.txt");
-            File::create(&path).unwrap();
-            assert!(MediaLibrary::get_mtime(&path).is_some());
-
-            let path = tp.join("dir");
-            db.create(&path).unwrap();
-            assert!(MediaLibrary::get_mtime(&path).is_some());
-
-            let path = tp.join("NON_EXISTENT");
-            assert!(MediaLibrary::get_mtime(&path).is_none());
-        }
     }
 }
+
