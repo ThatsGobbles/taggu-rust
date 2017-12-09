@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use yaml_rust::Yaml;
+
+use path::normalize;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum MetaKey {
@@ -14,6 +17,43 @@ pub enum MetaValue {
     String(String),
     Sequence(Vec<MetaValue>),
     Mapping(BTreeMap<MetaKey, MetaValue>),
+}
+
+pub enum MetaTarget {
+    // TODO: Ensure that the file names are simple and do not contain any dot-refs or slashes.
+    Alongside(String),
+    Container(String),
+}
+
+impl MetaTarget {
+    pub fn meta_file_name(&self) -> &String {
+        match *self {
+            MetaTarget::Alongside(ref x) => x,
+            MetaTarget::Container(ref x) => x,
+        }
+    }
+
+    pub fn target_dir_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        let abs_item_path = normalize(&abs_item_path.into());
+
+        if !abs_item_path.exists() {
+            return None
+        }
+
+        match *self {
+            MetaTarget::Alongside(_) => abs_item_path.parent().map(|f| f.to_path_buf()),
+            MetaTarget::Container(_) => {
+                if abs_item_path.is_dir() { Some(abs_item_path) }
+                else { None }
+            },
+        }
+    }
+
+    pub fn meta_file_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+        self.target_dir_path(abs_item_path)
+            .map(|f| f.join(self.meta_file_name()))
+            .and_then(|f| if f.is_file() { Some(f) } else { None })
+    }
 }
 
 pub type MetaBlock = BTreeMap<String, MetaValue>;
@@ -39,18 +79,16 @@ fn yaml_as_string(y: &Yaml) -> Option<String> {
 }
 
 fn yaml_as_meta_key(y: &Yaml) -> Option<MetaKey> {
-    match y {
-        &Yaml::Null => Some(MetaKey::Null),
-        _ => {
-            yaml_as_string(&y).map(|s| MetaKey::String(s))
-        },
+    match *y {
+        Yaml::Null => Some(MetaKey::Null),
+        _ => yaml_as_string(y).map(|s| MetaKey::String(s)),
     }
 }
 
 fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
-    match y {
-        &Yaml::Null => Some(MetaValue::Null),
-        &Yaml::Array(ref arr) => {
+    match *y {
+        Yaml::Null => Some(MetaValue::Null),
+        Yaml::Array(ref arr) => {
             let mut seq: Vec<MetaValue> = vec![];
 
             // Recursively convert each found YAML item into a meta value.
@@ -64,7 +102,7 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
 
             Some(MetaValue::Sequence(seq))
         },
-        &Yaml::Hash(ref hsh) => {
+        Yaml::Hash(ref hsh) => {
             let mut map: BTreeMap<MetaKey, MetaValue> = BTreeMap::new();
 
             // Recursively convert each found YAML item into a meta value.
@@ -89,8 +127,8 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
 
 fn yaml_as_meta_block(y: &Yaml) -> Option<MetaBlock> {
     // Try to convert to a hash.
-    match y {
-        &Yaml::Hash(ref hsh) => {
+    match *y {
+        Yaml::Hash(ref hsh) => {
             let mut mb = MetaBlock::new();
 
             // Keys must be convertible to strings.
@@ -115,7 +153,7 @@ fn yaml_as_meta_block(y: &Yaml) -> Option<MetaBlock> {
 pub fn yaml_as_self_metadata(y: &Yaml) -> Option<SelfMetadata> {
     // Try to convert to self-metadata.
     // We expect a meta block.
-    yaml_as_meta_block(&y)
+    yaml_as_meta_block(y)
 }
 
 pub fn yaml_as_item_seq_metadata(y: &Yaml) -> Option<ItemSeqMetadata> {
@@ -447,66 +485,3 @@ mod tests {
         }
     }
 }
-
-// pub enum Metadata {
-//     SelfMeta(MetaBlock),
-//     SeqItemMeta(Vec<MetaBlock>),
-//     MapItemMeta(BTreeMap<String, MetaBlock>),
-// }
-
-// impl Metadata {
-//     // LEARN: It seems that using `impl trait` always requires a named lifetime.
-//     pub fn discover<'a, P: AsRef<Path> + 'a>(&'a self,
-//             rel_target_dir: P,
-//             media_lib: &'a MediaLibrary)
-//             -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a
-//     {
-//         let closure = move || {
-//             let normed = media_lib.co_norm(rel_target_dir);
-
-//             if let Ok((rel_target_dir, abs_target_dir)) = normed {
-//                 if !abs_target_dir.is_dir() {
-//                     return
-//                 }
-
-//                 match self {
-//                     &Metadata::SelfMeta(ref block) => {
-//                         yield (abs_target_dir, block.clone())
-//                     },
-//                     &Metadata::SeqItemMeta(ref vec_blocks) => {
-//                         let items = media_lib.sort_entries(media_lib.filtered_entries_in_dir(&rel_target_dir));
-
-//                         // TODO: Add warning here for mismatched counts.
-//                         for pair in items.iter().zip(vec_blocks) {
-//                             println!{"{:?}", pair};
-//                         }
-//                     },
-//                     _ => {
-//                     },
-//                 }
-//             }
-//             else {
-//                 return
-//             }
-//         };
-
-//         gen_to_iter(closure)
-//     }
-// }
-
-// pub fn example() {
-//     let selection = Selection::Or(
-//         Box::new(Selection::IsDir),
-//         Box::new(Selection::And(
-//             Box::new(Selection::IsFile),
-//             Box::new(Selection::Ext("flac".to_string())),
-//         )),
-//     );
-
-//     let media_lib = MediaLibrary::new("/home/lemoine/Music",
-//             "taggu_item.yml",
-//             "taggu_self.yml",
-//             selection,
-//             SortOrder::Name,
-//     ).unwrap();
-// }

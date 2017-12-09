@@ -15,6 +15,5 @@ mod generator;
 mod yaml;
 mod metadata;
 mod plexer;
-mod discovery;
 
 fn main() {}

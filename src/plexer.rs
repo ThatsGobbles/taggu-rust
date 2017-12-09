@@ -5,22 +5,26 @@ use std::collections::HashSet;
 
 use yaml_rust::{Yaml};
 
-use library::{MediaLibrary, MetaTarget};
+use library::{MediaLibrary};
 use library::selection::Selection;
 use library::sort_order::SortOrder;
 use generator::gen_to_iter;
 use metadata::{
     MetaBlock,
+    MetaTarget,
     yaml_as_self_metadata,
     yaml_as_item_map_metadata,
     yaml_as_item_seq_metadata,
 };
 use yaml::read_yaml_file;
 
-// TODO: Refactor out reference to MediaLibrary!
-// TODO: Add selection logic (selected_entries_in_dir) to Selection, and pass in &Selection instead.
-// TODO: Add sorting logic (sort_entries) to SortOrder, and pass in &SortOrder instead.
-pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a MetaTarget, selection: &'a Selection, sort_order: &'a SortOrder) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
+pub fn plex<'a, P: Into<PathBuf> + 'a>(
+        working_dir_path: P,
+        meta_target: &'a MetaTarget,
+        selection: &'a Selection,
+        sort_order: &'a SortOrder
+    ) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a
+{
     // Assume meta file path exists, and is a proper subpath.
     // We also assume that the meta path filename matches the meta target type.
     let closure = move || {
@@ -123,11 +127,140 @@ pub fn plex<'a, P: Into<PathBuf> + 'a>(working_dir_path: P, meta_target: &'a Met
 mod tests {
     use std::path::{PathBuf};
     use std::fs::{File, DirBuilder};
+    use std::io::Write;
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    use tempdir::TempDir;
 
     use super::plex;
+    use library::selection::Selection;
+    use library::sort_order::SortOrder;
+    use metadata::{MetaTarget, MetaValue};
 
     #[test]
     fn test_plex() {
+        // Create temp directory.
+        let temp = TempDir::new("test_plex").unwrap();
+        let root_dir = temp.path();
 
+        let self_meta_target = MetaTarget::Container(String::from("taggu_self.yml"));
+        let item_meta_target = MetaTarget::Alongside(String::from("taggu_item.yml"));
+
+        let selection: Selection = Selection::Ext(String::from("item"));
+
+        // Test self-metadata.
+        {
+            let temp = TempDir::new_in(&root_dir, "self_meta").unwrap();
+
+            let working_dir_path = temp.path();
+
+            let self_meta_path = working_dir_path.join(self_meta_target.meta_file_name());
+            let mut self_meta_file =
+                File::create(&self_meta_path)
+                    .expect("Unable to create metadata file");
+
+            writeln!(self_meta_file, "artist: lapix\ntitle: Beyond the Limits\ndate: 2014-12-30")
+                .expect("Unable to write metadata file");
+
+            let results: Vec<_> =
+                plex(&working_dir_path, &self_meta_target, &selection, &SortOrder::Name)
+                    .collect();
+
+            assert!(results.len() == 1);
+
+            let (ref t_path, ref t_mb) = results[0];
+
+            assert!(*t_path == working_dir_path);
+            assert!(*t_mb == btreemap![
+                String::from("artist") => MetaValue::String(String::from("lapix")),
+                String::from("date") => MetaValue::String(String::from("2014-12-30")),
+                String::from("title") => MetaValue::String(String::from("Beyond the Limits")),
+            ]);
+        };
+        // Test sequenced item-metadata.
+        {
+            let temp = TempDir::new_in(&root_dir, "item_meta").unwrap();
+
+            let working_dir_path = temp.path();
+
+            let item_meta_path = working_dir_path.join(item_meta_target.meta_file_name());
+            let mut item_meta_file =
+                File::create(&item_meta_path)
+                    .expect("Unable to create metadata file");
+
+            writeln!(item_meta_file, "- title: Foolish Hero\n- title: Beyond the Limits\n  feat.artist: Luschel")
+                .expect("Unable to write metadata file");
+
+            let item_file_names = vec!["b.item", "a.item"];
+
+            for item_file_name in &item_file_names {
+                let item_file_path = working_dir_path.join(item_file_name);
+                File::create(&item_file_path).expect("Unable to create item file");
+            }
+
+            let results: Vec<_> =
+                plex(&working_dir_path, &item_meta_target, &selection, &SortOrder::Name)
+                    .collect();
+
+            assert!(results.len() == 2);
+
+            let (ref t_path, ref t_mb) = results[0];
+
+            assert!(*t_path == working_dir_path.join("a.item"));
+            assert!(*t_mb == btreemap![
+                String::from("title") => MetaValue::String(String::from("Foolish Hero")),
+            ]);
+
+            let (ref t_path, ref t_mb) = results[1];
+
+            assert!(*t_path == working_dir_path.join("b.item"));
+            assert!(*t_mb == btreemap![
+                String::from("feat.artist") => MetaValue::String(String::from("Luschel")),
+                String::from("title") => MetaValue::String(String::from("Beyond the Limits")),
+            ]);
+        };
+        // Test mapped item-metadata.
+        {
+            let temp = TempDir::new_in(&root_dir, "item_meta").unwrap();
+
+            let working_dir_path = temp.path();
+
+            let item_meta_path = working_dir_path.join(item_meta_target.meta_file_name());
+            let mut item_meta_file =
+                File::create(&item_meta_path)
+                    .expect("Unable to create metadata file");
+
+            writeln!(item_meta_file, "a.item:\n  title: Foolish Hero\nb.item:\n  title: Beyond the Limits\n  feat.artist: Luschel")
+                .expect("Unable to write metadata file");
+
+            let item_file_names = vec!["b.item", "a.item"];
+
+            for item_file_name in &item_file_names {
+                let item_file_path = working_dir_path.join(item_file_name);
+                File::create(&item_file_path).expect("Unable to create item file");
+            }
+
+            let results: Vec<_> =
+                plex(&working_dir_path, &item_meta_target, &selection, &SortOrder::Name)
+                    .collect();
+
+            assert!(results.len() == 2);
+
+            let (ref t_path, ref t_mb) = results[0];
+
+            assert!(*t_path == working_dir_path.join("a.item"));
+            assert!(*t_mb == btreemap![
+                String::from("title") => MetaValue::String(String::from("Foolish Hero")),
+            ]);
+
+            let (ref t_path, ref t_mb) = results[1];
+
+            assert!(*t_path == working_dir_path.join("b.item"));
+            assert!(*t_mb == btreemap![
+                String::from("feat.artist") => MetaValue::String(String::from("Luschel")),
+                String::from("title") => MetaValue::String(String::from("Beyond the Limits")),
+            ]);
+        };
     }
 }
