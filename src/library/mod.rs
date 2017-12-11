@@ -130,9 +130,9 @@ impl MediaLibrary {
 
     // ASSOCIATED FUNCTIONS
 
-    pub fn is_valid_item_name<S: Into<String>>(file_name: S) -> bool {
-        let file_name = file_name.into();
-        let normed = normalize(Path::new(&file_name));
+    pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
+        let file_name = file_name.as_ref();
+        let normed = normalize(Path::new(file_name));
 
         // A valid item file name will have the same string repr before and after normalization.
         match normed.to_str() {
@@ -229,8 +229,8 @@ mod tests {
         );
 
         // Create sample item files and directories.
-        File::create(tp.join("item.flac")).unwrap();
         db.create(tp.join("subdir")).unwrap();
+        File::create(tp.join("item.flac")).unwrap();
         File::create(tp.join("subdir").join("subitem.flac")).unwrap();
 
         // Create meta files.
@@ -285,9 +285,13 @@ mod tests {
 
         let db = DirBuilder::new();
 
-        let meta_targets = vec![
+        let meta_targets_map = vec![
             MetaTarget::Container(String::from("self.yml")),
-            MetaTarget::Alongside(String::from("item.yml")),
+            MetaTarget::Alongside(String::from("item_map.yml")),
+        ];
+        let meta_targets_seq = vec![
+            MetaTarget::Container(String::from("self.yml")),
+            MetaTarget::Alongside(String::from("item_seq.yml")),
         ];
         let selection = Selection::Or(
             Box::new(Selection::IsDir),
@@ -300,8 +304,8 @@ mod tests {
         );
 
         // Create sample item files and directories.
-        File::create(tp.join("item.flac")).unwrap();
         db.create(tp.join("subdir")).unwrap();
+        File::create(tp.join("item.flac")).unwrap();
         File::create(tp.join("subdir").join("subitem.flac")).unwrap();
 
         // Create meta files.
@@ -311,10 +315,16 @@ mod tests {
         writeln!(meta_file, "title: PsyStyle Nation\nartist: [lapix, Massive New Krew]")
             .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("item.yml"))
+        let mut meta_file = File::create(tp.join("item_map.yml"))
             .expect("Unable to create metadata file");
 
         writeln!(meta_file, "item.flac:\n  title: Black Mamba\n  artist: lapix\nsubdir:\n  title: What Is This?")
+            .expect("Unable to write metadata file");
+
+        let mut meta_file = File::create(tp.join("item_seq.yml"))
+            .expect("Unable to create metadata file");
+
+        writeln!(meta_file, "- title: Black Mamba\n  artist: lapix\n- title: What Is This?")
             .expect("Unable to write metadata file");
 
         let mut meta_file = File::create(tp.join("subdir").join("self.yml"))
@@ -324,15 +334,22 @@ mod tests {
             .expect("Unable to write metadata file");
 
         // Create media library.
-        let media_lib = MediaLibrary::new(
+        let media_lib_map = MediaLibrary::new(
             &tp,
-            meta_targets,
-            selection,
+            meta_targets_map,
+            selection.clone(),
             SortOrder::Name,
         ).expect("Unable to create media library");
 
+        let media_lib_seq = MediaLibrary::new(
+            &tp,
+            meta_targets_seq,
+            selection.clone(),
+            SortOrder::ModTime,
+        ).expect("Unable to create media library");
+
         // Run tests.
-        let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("self.yml")).collect();
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).collect();
         assert_eq!(
             vec![
                 (tp.to_path_buf(), btreemap![
@@ -347,7 +364,7 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("item.yml")).collect();
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("item_map.yml")).collect();
         assert_eq!(
             vec![
                 (tp.join("item.flac"), btreemap![
@@ -361,7 +378,21 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("subdir").join("self.yml")).collect();
+        let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml")).collect();
+        assert_eq!(
+            vec![
+                (tp.join("subdir"), btreemap![
+                    String::from("artist") => MetaValue::String(String::from("lapix")),
+                    String::from("title") => MetaValue::String(String::from("Black Mamba")),
+                ]),
+                (tp.join("item.flac"), btreemap![
+                    String::from("title") => MetaValue::String(String::from("What Is This?")),
+                ]),
+            ],
+            found
+        );
+
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("subdir").join("self.yml")).collect();
         assert_eq!(
             vec![
                 (tp.join("subdir"), btreemap![
@@ -372,20 +403,8 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).collect();
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).collect();
         assert_eq!(Vec::<(PathBuf, MetaBlock)>::new(), found);
-
-        // let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("item.flac")).collect();
-        // assert_eq!(vec![tp.join("item.yml")], found);
-
-        // let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("subdir")).collect();
-        // assert_eq!(vec![tp.join("subdir").join("self.yml"), tp.join("item.yml")], found);
-
-        // let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).collect();
-        // assert_eq!(Vec::<PathBuf>::new(), found);
-
-        // let found: Vec<_> = media_lib.item_fps_from_meta_fp(tp.join("subdir").join("subitem.flac")).collect();
-        // assert_eq!(Vec::<PathBuf>::new(), found);
     }
 
     // ASSOCIATED FUNCTIONS

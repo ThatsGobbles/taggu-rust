@@ -5,7 +5,7 @@ use std::fs::DirEntry;
 
 use super::super::path::normalize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Selection {
     Ext(String),
     Regex(Regex),
