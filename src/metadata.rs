@@ -19,10 +19,14 @@ pub enum MetaValue {
     Mapping(BTreeMap<MetaKey, MetaValue>),
 }
 
+pub type MetaFilename = String;
+
+/// Represents one or more item targets that a given set of metadata provides data for.
+/// This is also paired with a filename specific to that metadata type.
 pub enum MetaTarget {
     // TODO: Ensure that the file names are simple and do not contain any dot-refs or slashes.
-    Alongside(String),
-    Container(String),
+    Alongside(MetaFilename),
+    Container(MetaFilename),
 }
 
 impl MetaTarget {
@@ -60,6 +64,14 @@ pub type MetaBlock = BTreeMap<String, MetaValue>;
 pub type SelfMetadata = MetaBlock;
 pub type ItemSeqMetadata = Vec<MetaBlock>;
 pub type ItemMapMetadata = BTreeMap<String, MetaBlock>;
+
+/// A data structure-level representation of all possible metadata structures.
+/// This is intended to be independent of the text-level representation of the metadata.
+pub enum MetaStructure<'a> {
+    SelfStructure(&'a SelfMetadata),
+    ItemSeqStructure(&'a ItemSeqMetadata),
+    ItemMapStructure(&'a ItemMapMetadata),
+}
 
 fn yaml_as_string(y: &Yaml) -> Option<String> {
     match y {
