@@ -58,36 +58,36 @@ impl MediaLibrary {
         abs_sub_path.starts_with(&self.root_dir)
     }
 
-    pub fn find_meta_target_by_fn<S: AsRef<str>>(&self, meta_file_name: S) -> Option<&MetaTarget> {
-        let meta_file_name = meta_file_name.as_ref();
-        self.meta_targets.iter().find(|ref mt| *mt.meta_file_name() == *meta_file_name)
-    }
+    // pub fn find_meta_target_by_fn<S: AsRef<str>>(&self, meta_file_name: S) -> Option<&MetaTarget> {
+    //     let meta_file_name = meta_file_name.as_ref();
+    //     self.meta_targets.iter().find(|ref mt| *mt.meta_file_name() == *meta_file_name)
+    // }
 
-    pub fn meta_fps_from_item_fp<'a, P: Into<PathBuf> + 'a>(&'a self, abs_item_path: P) -> impl Iterator<Item = PathBuf> + 'a {
-        let abs_item_path = normalize(&abs_item_path.into());
+    // pub fn meta_fps_from_item_fp<'a, P: Into<PathBuf> + 'a>(&'a self, abs_item_path: P) -> impl Iterator<Item = PathBuf> + 'a {
+    //     let abs_item_path = normalize(&abs_item_path.into());
 
-        let closure = move || {
-            // Rule: item path must be proper.
-            if !self.is_proper_sub_path(&abs_item_path) {
-                return
-            }
+    //     let closure = move || {
+    //         // Rule: item path must be proper.
+    //         if !self.is_proper_sub_path(&abs_item_path) {
+    //             return
+    //         }
 
-            // Rule: item path must exist.
-            if !abs_item_path.exists() {
-                return
-            }
+    //         // Rule: item path must exist.
+    //         if !abs_item_path.exists() {
+    //             return
+    //         }
 
-            for meta_target in &self.meta_targets {
-                let temp = meta_target.meta_file_path(&abs_item_path);
-                if let Some(meta_fp) = temp {
-                    if self.is_proper_sub_path(&abs_item_path) {
-                        yield meta_fp
-                    }
-                }
-            }
-        };
-        gen_to_iter(closure)
-    }
+    //         for meta_target in &self.meta_targets {
+    //             let temp = meta_target.meta_file_path(&abs_item_path);
+    //             if let Some(meta_fp) = temp {
+    //                 if self.is_proper_sub_path(&abs_item_path) {
+    //                     yield meta_fp
+    //                 }
+    //             }
+    //         }
+    //     };
+    //     gen_to_iter(closure)
+    // }
 
     // pub fn item_fps_from_meta_fp<'a, P: Into<PathBuf> + 'a>(&'a self, abs_meta_path: P) -> impl Iterator<Item = (PathBuf, MetaBlock)> + 'a {
     //     let abs_meta_path = normalize(&abs_meta_path.into());
@@ -206,76 +206,76 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_meta_fps_from_item_fp() {
-        // Create temp directory.
-        let temp = TempDir::new("test_meta_fps_from_item_fp").unwrap();
-        let tp = temp.path();
+    // #[test]
+    // fn test_meta_fps_from_item_fp() {
+    //     // Create temp directory.
+    //     let temp = TempDir::new("test_meta_fps_from_item_fp").unwrap();
+    //     let tp = temp.path();
 
-        let db = DirBuilder::new();
+    //     let db = DirBuilder::new();
 
-        let meta_targets = vec![
-            MetaTarget::Container(String::from("self.yml")),
-            MetaTarget::Alongside(String::from("item.yml")),
-        ];
-        let selection = Selection::Or(
-            Box::new(Selection::IsDir),
-            Box::new(
-                Selection::And(
-                    Box::new(Selection::IsFile),
-                    Box::new(Selection::Ext("flac".to_string())),
-                ),
-            ),
-        );
+    //     let meta_targets = vec![
+    //         MetaTarget::Container(String::from("self.yml")),
+    //         MetaTarget::Alongside(String::from("item.yml")),
+    //     ];
+    //     let selection = Selection::Or(
+    //         Box::new(Selection::IsDir),
+    //         Box::new(
+    //             Selection::And(
+    //                 Box::new(Selection::IsFile),
+    //                 Box::new(Selection::Ext("flac".to_string())),
+    //             ),
+    //         ),
+    //     );
 
-        // Create sample item files and directories.
-        db.create(tp.join("subdir")).unwrap();
-        File::create(tp.join("item.flac")).unwrap();
-        File::create(tp.join("subdir").join("subitem.flac")).unwrap();
+    //     // Create sample item files and directories.
+    //     db.create(tp.join("subdir")).unwrap();
+    //     File::create(tp.join("item.flac")).unwrap();
+    //     File::create(tp.join("subdir").join("subitem.flac")).unwrap();
 
-        // Create meta files.
-        let mut meta_file = File::create(tp.join("self.yml"))
-            .expect("Unable to create metadata file");
+    //     // Create meta files.
+    //     let mut meta_file = File::create(tp.join("self.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "title: PsyStyle Nation\nartist: [lapix, Massive New Krew]")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "title: PsyStyle Nation\nartist: [lapix, Massive New Krew]")
+    //         .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("item.yml"))
-            .expect("Unable to create metadata file");
+    //     let mut meta_file = File::create(tp.join("item.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "item.flac:\n  title: Black Mamba\n  artist: lapix\nsubdir:\n  title: What Is This?")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "item.flac:\n  title: Black Mamba\n  artist: lapix\nsubdir:\n  title: What Is This?")
+    //         .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("subdir").join("self.yml"))
-            .expect("Unable to create metadata file");
+    //     let mut meta_file = File::create(tp.join("subdir").join("self.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "title: A Subtrack?\nartist: Massive New Krew")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "title: A Subtrack?\nartist: Massive New Krew")
+    //         .expect("Unable to write metadata file");
 
-        // Create media library.
-        let media_lib = MediaLibrary::new(
-            &tp,
-            meta_targets,
-            selection,
-            SortOrder::Name,
-        ).expect("Unable to create media library");
+    //     // Create media library.
+    //     let media_lib = MediaLibrary::new(
+    //         &tp,
+    //         meta_targets,
+    //         selection,
+    //         SortOrder::Name,
+    //     ).expect("Unable to create media library");
 
-        // Run tests.
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp).collect();
-        assert_eq!(vec![tp.join("self.yml")], found);
+    //     // Run tests.
+    //     let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp).collect();
+    //     assert_eq!(vec![tp.join("self.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("item.flac")).collect();
-        assert_eq!(vec![tp.join("item.yml")], found);
+    //     let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("item.flac")).collect();
+    //     assert_eq!(vec![tp.join("item.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir")).collect();
-        assert_eq!(vec![tp.join("subdir").join("self.yml"), tp.join("item.yml")], found);
+    //     let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir")).collect();
+    //     assert_eq!(vec![tp.join("subdir").join("self.yml"), tp.join("item.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("DOES_NOT_EXIST")).collect();
-        assert_eq!(Vec::<PathBuf>::new(), found);
+    //     let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("DOES_NOT_EXIST")).collect();
+    //     assert_eq!(Vec::<PathBuf>::new(), found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir").join("subitem.flac")).collect();
-        assert_eq!(Vec::<PathBuf>::new(), found);
-    }
+    //     let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir").join("subitem.flac")).collect();
+    //     assert_eq!(Vec::<PathBuf>::new(), found);
+    // }
 
     // #[test]
     // fn test_item_fps_from_meta_fp() {
