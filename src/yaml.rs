@@ -14,6 +14,8 @@ use metadata::{
     MetaBlock,
     MetaBlockSeq,
     MetaBlockMap,
+    SelfMetaFormat,
+    ItemMetaFormat,
 };
 
 pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml, YamlError> {
@@ -166,17 +168,17 @@ pub fn yaml_as_meta_block_map(y: &Yaml) -> Option<MetaBlockMap> {
     }
 }
 
-// pub fn yaml_as_metadata(y: &Yaml, meta_target: &MetaTarget) -> Option<Metadata> {
-//     match *meta_target {
-//         MetaTarget::Contains => {
-//             yaml_as_meta_block(y).map(|m| Metadata::Contains(m))
-//         },
-//         MetaTarget::Siblings => {
-//             yaml_as_meta_block_seq(y).map(|m| Metadata::SiblingsSeq(m))
-//                 .or(yaml_as_meta_block_map(y).map(|m| Metadata::SiblingsMap(m)))
-//         },
-//     }
-// }
+pub fn yaml_as_metadata(y: &Yaml, meta_target: &MetaTarget) -> Option<Metadata> {
+    match *meta_target {
+        MetaTarget::Contains => {
+            yaml_as_meta_block(y).map(|m| Metadata::SelfMetadata(SelfMetaFormat::Def(m)))
+        },
+        MetaTarget::Siblings => {
+            yaml_as_meta_block_seq(y).map(|m| Metadata::ItemMetadata(ItemMetaFormat::Seq(m)))
+                .or(yaml_as_meta_block_map(y).map(|m| Metadata::ItemMetadata(ItemMetaFormat::Map(m))))
+        },
+    }
+}
 
 #[cfg(test)]
 mod tests {

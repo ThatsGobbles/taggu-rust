@@ -1,8 +1,7 @@
-use std::path::Path;
-use std::path::PathBuf;
-use std::path::Component;
+use std::path::{Path, PathBuf, Component};
 
-pub fn normalize(p: &Path) -> PathBuf {
+pub fn normalize<P: AsRef<Path>>(p: P) -> PathBuf {
+    let p = p.as_ref();
     let mut stack: Vec<Component> = vec![];
 
     // We assume .components() removes redundant consecutive path separators.
@@ -66,9 +65,9 @@ pub fn normalize(p: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
     use super::normalize;
-    use std::path::Path;
-    use std::path::PathBuf;
 
     #[test]
     fn test_normalize() {

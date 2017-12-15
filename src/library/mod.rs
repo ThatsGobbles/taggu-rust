@@ -19,9 +19,11 @@ use super::generator::gen_to_iter;
 use self::selection::Selection;
 use self::sort_order::SortOrder;
 
+pub type MetaTargetSpec = (MetaTarget, String);
+
 pub struct MediaLibrary {
     root_dir: PathBuf,
-    meta_targets: Vec<MetaTarget>,
+    meta_targets: Vec<MetaTargetSpec>,
     selection: Selection,
     sort_order: SortOrder,
 }
@@ -34,7 +36,7 @@ impl MediaLibrary {
     /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
     pub fn new<P: Into<PathBuf>>(
             root_dir: P,
-            meta_targets: Vec<MetaTarget>,
+            meta_targets: Vec<MetaTargetSpec>,
             selection: Selection,
             sort_order: SortOrder,
             ) -> Result<MediaLibrary, MediaLibraryError> {

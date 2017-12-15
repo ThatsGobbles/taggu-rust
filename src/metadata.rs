@@ -9,7 +9,7 @@ pub enum MetaKey {
     String(String),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum MetaValue {
     Null,
     String(String),

@@ -112,14 +112,18 @@ where I: IntoIterator<Item = &'a J>,
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::{
         plex_self_format,
         plex_meta_block_seq,
+        plex_meta_block_map,
         PlexTarget,
     };
     use metadata::{
         MetaBlock,
         MetaBlockSeq,
+        MetaBlockMap,
         MetaValue,
         SelfMetaFormat,
         ItemMetaFormat,
@@ -161,7 +165,6 @@ mod tests {
             ],
         ];
 
-        // let imf: ItemMetaFormat = ItemMetaFormat::Seq(mb_seq.clone());
         let names: Vec<&str> = vec!["TRACK01.flac", "TRACK02.flac", "TRACK03.flac"];
 
         let expected = vec![
@@ -170,6 +173,38 @@ mod tests {
             (PlexTarget::SubItem(names[2].to_string()), &mb_seq[2]),
         ];
         let produced = plex_meta_block_seq(&mb_seq, &names);
+
+        assert_eq!(expected, produced);
+    }
+
+    #[test]
+    fn test_plex_meta_block_map() {
+        let mb_map: MetaBlockMap = btreemap![
+            String::from("TRACK01.flac") => btreemap![
+                String::from("artist") => MetaValue::Sequence(vec![
+                    MetaValue::String(String::from("MK")),
+                    MetaValue::String(String::from("Kanae Asaba")),
+                ]),
+                String::from("title") => MetaValue::String(String::from("I'm Falling Love With You")),
+            ],
+            String::from("TRACK02.flac") => btreemap![
+                String::from("artist") => MetaValue::String(String::from("Taishi")),
+                String::from("title") => MetaValue::String(String::from("Floating Disk")),
+            ],
+            String::from("TRACK03.flac") => btreemap![
+                String::from("artist") => MetaValue::String(String::from("Nhato")),
+                String::from("title") => MetaValue::String(String::from("Jupiter Junction")),
+            ],
+        ];
+
+        let names: Vec<&str> = vec!["TRACK01.flac", "TRACK02.flac", "TRACK03.flac"];
+
+        let expected = hashset![
+            (PlexTarget::SubItem(names[1].to_string()), &mb_map["TRACK02.flac"]),
+            (PlexTarget::SubItem(names[0].to_string()), &mb_map["TRACK01.flac"]),
+            (PlexTarget::SubItem(names[2].to_string()), &mb_map["TRACK03.flac"]),
+        ];
+        let produced: HashSet<_> = plex_meta_block_map(&mb_map, &names).into_iter().collect();
 
         assert_eq!(expected, produced);
     }
