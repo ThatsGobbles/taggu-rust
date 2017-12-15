@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 use path::normalize;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub enum MetaKey {
     Null,
     String(String),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum MetaValue {
     Null,
     String(String),
