@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use path::normalize;
 
@@ -24,7 +24,7 @@ pub enum MetaTarget {
 }
 
 impl MetaTarget {
-    pub fn target_dir_path<P: AsRef<PathBuf>>(&self, abs_item_path: P) -> Option<PathBuf> {
+    pub fn target_dir_path<P: AsRef<Path>>(&self, abs_item_path: P) -> Option<PathBuf> {
         let abs_item_path = normalize(&abs_item_path.as_ref());
 
         if !abs_item_path.exists() {
