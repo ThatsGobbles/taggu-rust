@@ -64,18 +64,10 @@ impl Selection {
             }
         }
 
-        // abs_dir_path.read_dir().map(|dir_entries| {
-        //     for dir_entry in dir_entries {
-        //         if let Ok(dir_entry) = dir_entry {
-        //             if self.is_selected_path(dir_entry.path()) {
-        //                 sel_entries.push(dir_entry);
-        //             }
-        //         }
-        //     }
-        // }).is_ok();
-
         sel_entries
     }
+
+    // TODO: Create macros/functions to help with selection creation.
 }
 
 #[cfg(test)]
@@ -148,7 +140,10 @@ mod tests {
                     Box::new(Selection::Ext("flac".to_string())),
                 )),
             ), vec![1, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 17]),
-            // TODO: Add Xor case.
+            (Selection::Xor(
+                Box::new(Selection::IsFile),
+                Box::new(Selection::Regex(Regex::new(r".*_a\..*").unwrap())),
+            ), vec![0, 3, 5, 6, 8, 10, 12, 14, 16]),
             (Selection::Not(
                 Box::new(Selection::IsFile),
             ), vec![1, 3, 5, 7, 9, 11, 13, 15, 17]),
@@ -164,7 +159,7 @@ mod tests {
             for (index, &(ref abs_path, _)) in paths_and_flags.iter().enumerate() {
                 let expected = true_indices.contains(&index);
                 let produced = selection.is_selected_path(&abs_path);
-                // println!("{:?}, {:?}", abs_path, selection);
+                println!("{:?}, {:?}", abs_path, selection);
                 assert_eq!(expected, produced);
             }
         }

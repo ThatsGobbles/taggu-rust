@@ -73,12 +73,18 @@ mod tests {
     fn test_normalize() {
         assert_eq!(normalize(Path::new("")), PathBuf::from("."));
         assert_eq!(normalize(Path::new("/")), PathBuf::from("/"));
-        assert_eq!(normalize(Path::new("/..")), PathBuf::from("/"));
+        assert_eq!(normalize(Path::new("//")), PathBuf::from("/"));
+        assert_eq!(normalize(Path::new("///")), PathBuf::from("/"));
         assert_eq!(normalize(Path::new(".")), PathBuf::from("."));
-        assert_eq!(normalize(Path::new("./foo")), PathBuf::from("foo"));
-        assert_eq!(normalize(Path::new("foo")), PathBuf::from("foo"));
+        assert_eq!(normalize(Path::new("..")), PathBuf::from(".."));
+        assert_eq!(normalize(Path::new("./")), PathBuf::from("."));
+        assert_eq!(normalize(Path::new("../")), PathBuf::from(".."));
         assert_eq!(normalize(Path::new("/.")), PathBuf::from("/"));
         assert_eq!(normalize(Path::new("/..")), PathBuf::from("/"));
+        assert_eq!(normalize(Path::new("./foo")), PathBuf::from("foo"));
+        assert_eq!(normalize(Path::new("foo")), PathBuf::from("foo"));
+        assert_eq!(normalize(Path::new(".foo")), PathBuf::from(".foo"));
+        assert_eq!(normalize(Path::new("foo.")), PathBuf::from("foo."));
         assert_eq!(normalize(Path::new("foo/bar/")), PathBuf::from("foo/bar"));
         assert_eq!(normalize(Path::new("foo//bar///")), PathBuf::from("foo/bar"));
         assert_eq!(normalize(Path::new("foo/bar/./baz/")), PathBuf::from("foo/bar/baz"));

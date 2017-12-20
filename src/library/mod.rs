@@ -3,18 +3,10 @@ pub mod sort_order;
 
 use std::path::{Path, PathBuf};
 use std::path::Component;
-use std::ffi::OsString;
-use std::fs::DirEntry;
-use std::cmp::Ordering;
-use std::time::SystemTime;
-use std::collections::BTreeMap;
-
-use regex::Regex;
 
 use error::MediaLibraryError;
 use path::normalize;
 use metadata::{MetaBlock, MetaTarget};
-use generator::gen_to_iter;
 use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
 
@@ -29,9 +21,6 @@ pub struct MediaLibrary {
 }
 
 impl MediaLibrary {
-
-    // METHODS
-
     /// Creates a new `MediaLibrary`.
     /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
     pub fn new<P: AsRef<Path>>(
@@ -96,7 +85,6 @@ impl MediaLibrary {
     }
 
     pub fn item_fps_from_meta_fp<P: AsRef<Path>>(&self, abs_meta_path: P) -> Vec<(PathBuf, MetaBlock)> {
-        println!("-------------------------------------------");
         let abs_meta_path = normalize(abs_meta_path.as_ref());
 
         // Rule: meta file path must be proper.
@@ -128,8 +116,6 @@ impl MediaLibrary {
                             for (plex_target, mb) in plex_results {
                                 let item_path = plex_target.resolve(working_dir_path);
 
-                                println!("{:?}", (item_path.clone(), mb));
-
                                 results.push((item_path, mb.clone()));
                             }
                         }
@@ -140,8 +126,6 @@ impl MediaLibrary {
 
         results
     }
-
-    // ASSOCIATED FUNCTIONS
 
     pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
         let file_name = file_name.as_ref();
@@ -176,11 +160,9 @@ impl MediaLibrary {
 mod tests {
     use std::path::{PathBuf};
     use std::fs::{File, DirBuilder};
-    use std::collections::HashSet;
     use std::io::Write;
 
     use tempdir::TempDir;
-    use regex::Regex;
 
     use metadata::{MetaTarget, MetaValue, MetaBlock};
     use library::{MediaLibrary, SortOrder};

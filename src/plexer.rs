@@ -2,7 +2,6 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
-use std::borrow::Cow;
 
 use library::{
     MediaLibrary,
@@ -17,10 +16,7 @@ use metadata::{
     MetaBlock,
     MetaBlockSeq,
     MetaBlockMap,
-    MetaTarget,
     Metadata,
-    // SelfMetaFormat,
-    // ItemMetaFormat,
 };
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,6 +35,7 @@ impl PlexTarget {
         }
     }
 
+    // LEARN: This would be the way to ideally do it, not needed because a PathBuf is needed later on anyways.
     // pub fn resolve<'a, P: Into<Cow<'a, Path>>>(&self, working_dir_path: P) -> Cow<'a, Path> {
     //     self.resolve_nongeneric(working_dir_path.into())
     // }
@@ -150,7 +147,6 @@ mod tests {
         MetaBlockSeq,
         MetaBlockMap,
         MetaValue,
-        Metadata,
     };
 
     #[test]

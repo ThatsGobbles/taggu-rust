@@ -16,4 +16,8 @@ mod yaml;
 mod metadata;
 mod plexer;
 
-fn main() {}
+fn main() {
+    use std::path::Path;
+
+    let _reader = Path::new("/home/lemoine/useful_text.txt").read_dir().unwrap();
+}

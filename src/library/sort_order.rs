@@ -39,9 +39,6 @@ mod tests {
         let temp = TempDir::new("").unwrap();
         let tp = temp.path();
 
-        // Create and test temp files and directories.
-        let db = DirBuilder::new();
-
         let fps = vec![
             tp.join("file_b"),
             tp.join("file_a"),
