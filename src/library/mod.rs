@@ -2,10 +2,9 @@ pub mod selection;
 pub mod sort_order;
 
 use std::path::{Path, PathBuf};
-use std::path::Component;
 
 use error::MediaLibraryError;
-use path::normalize;
+use helpers::normalize;
 use metadata::{MetaBlock, MetaTarget};
 use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
@@ -125,29 +124,6 @@ impl MediaLibrary {
         }
 
         results
-    }
-
-    pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
-        let file_name = file_name.as_ref();
-        let normed = normalize(Path::new(file_name));
-
-        // A valid item file name will have the same string repr before and after normalization.
-        match normed.to_str() {
-            Some(ns) if ns == file_name => {},
-            _ => { return false },
-        }
-
-        let comps: Vec<_> = normed.components().collect();
-
-        // A valid item file name has only one component, and it must be normal.
-        if comps.len() != 1 {
-            return false
-        }
-
-        match comps[0] {
-            Component::Normal(_) => true,
-            _ => false
-        }
     }
 }
 
@@ -275,7 +251,7 @@ mod tests {
     #[test]
     fn test_item_fps_from_meta_fp() {
         // Create temp directory.
-        let temp = TempDir::new("test_meta_fps_from_item_fp").unwrap();
+        let temp = TempDir::new("test_item_fps_from_meta_fp").unwrap();
         let tp = temp.path();
 
         let db = DirBuilder::new();
@@ -434,34 +410,6 @@ mod tests {
         );
 
         assert!(ml.is_err());
-    }
-
-    #[test]
-    fn test_is_valid_item_name() {
-        let inputs_and_expected = vec![
-            ("simple", true),
-            ("simple.ext", true),
-            ("spaces ok", true),
-            ("questions?", true),
-            ("exclamation!", true),
-            ("period.", true),
-            (".period", true),
-            ("", false),
-            (".", false),
-            ("..", false),
-            ("/simple", false),
-            ("./simple", false),
-            ("simple/", false),
-            ("simple/.", false),
-            ("/", false),
-            ("/simple/more", false),
-            ("simple/more", false),
-        ];
-
-        for (input, expected) in inputs_and_expected {
-            let produced = MediaLibrary::is_valid_item_name(input);
-            assert_eq!(expected, produced);
-        }
     }
 }
 

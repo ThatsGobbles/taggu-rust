@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::fs::DirEntry;
 
-use path::normalize;
+use helpers::normalize;
 use library::sort_order::SortOrder;
 use library::selection::Selection;
 

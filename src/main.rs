@@ -7,17 +7,16 @@ extern crate regex;
 extern crate yaml_rust;
 #[macro_use] extern crate maplit;
 #[macro_use] extern crate log;
+extern crate glob;
 
 mod library;
 mod error;
-mod path;
+mod helpers;
 mod generator;
 mod yaml;
 mod metadata;
 mod plexer;
+mod query;
 
 fn main() {
-    use std::path::Path;
-
-    let _reader = Path::new("/home/lemoine/useful_text.txt").read_dir().unwrap();
 }

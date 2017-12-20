@@ -3,9 +3,6 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
-use library::{
-    MediaLibrary,
-};
 use library::sort_order::{
     SortOrder,
 };
@@ -18,6 +15,7 @@ use metadata::{
     MetaBlockMap,
     Metadata,
 };
+use helpers::is_valid_item_name;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlexTarget {
@@ -109,7 +107,7 @@ where I: IntoIterator<Item = &'a J>,
 
     for (item_file_name, mb) in meta_block_map {
         // Check if the item name is valid.
-        if !MediaLibrary::is_valid_item_name(&item_file_name) {
+        if !is_valid_item_name(&item_file_name) {
             warn!(r#"Item name "{}" is invalid"#, item_file_name);
             continue;
         }

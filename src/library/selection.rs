@@ -3,7 +3,7 @@ use regex::Regex;
 use std::ffi::OsStr;
 use std::fs::DirEntry;
 
-use super::super::path::normalize;
+use helpers::normalize;
 
 #[derive(Debug, Clone)]
 pub enum Selection {
@@ -159,7 +159,6 @@ mod tests {
             for (index, &(ref abs_path, _)) in paths_and_flags.iter().enumerate() {
                 let expected = true_indices.contains(&index);
                 let produced = selection.is_selected_path(&abs_path);
-                println!("{:?}, {:?}", abs_path, selection);
                 assert_eq!(expected, produced);
             }
         }
