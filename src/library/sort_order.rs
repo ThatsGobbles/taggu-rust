@@ -1,16 +1,17 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::SystemTime;
 use std::cmp::Ordering;
 
+#[derive(Copy, Clone)]
 pub enum SortOrder {
     Name,
     ModTime,
 }
 
 impl SortOrder {
-    pub fn path_sort_cmp<P: Into<PathBuf>>(&self, abs_item_path_a: P, abs_item_path_b: P) -> Ordering {
-        let abs_item_path_a = abs_item_path_a.into();
-        let abs_item_path_b = abs_item_path_b.into();
+    pub fn path_sort_cmp<P: AsRef<Path>>(&self, abs_item_path_a: P, abs_item_path_b: P) -> Ordering {
+        let abs_item_path_a = abs_item_path_a.as_ref();
+        let abs_item_path_b = abs_item_path_b.as_ref();
 
         match *self {
             SortOrder::Name => abs_item_path_a.file_name().cmp(&abs_item_path_b.file_name()),
@@ -18,8 +19,8 @@ impl SortOrder {
         }
     }
 
-    fn get_mtime<P: Into<PathBuf>>(abs_path: P) -> Option<SystemTime> {
-        abs_path.into().metadata().and_then(|m| m.modified()).ok()
+    fn get_mtime<P: AsRef<Path>>(abs_path: P) -> Option<SystemTime> {
+        abs_path.as_ref().metadata().and_then(|m| m.modified()).ok()
     }
 }
 

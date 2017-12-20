@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use regex::Regex;
 use std::ffi::OsStr;
 use std::fs::DirEntry;
@@ -20,8 +20,8 @@ pub enum Selection {
 }
 
 impl Selection {
-    pub fn is_selected_path<P: Into<PathBuf>>(&self, abs_item_path: P) -> bool {
-        let abs_item_path = normalize(&abs_item_path.into());
+    pub fn is_selected_path<P: AsRef<Path>>(&self, abs_item_path: P) -> bool {
+        let abs_item_path = normalize(abs_item_path.as_ref());
 
         if !abs_item_path.exists() {
             return false
@@ -49,12 +49,12 @@ impl Selection {
         }
     }
 
-    pub fn selected_entries_in_dir<P: Into<PathBuf>>(&self, abs_dir_path: P) -> Vec<DirEntry> {
-        let abs_dir_path = normalize(&abs_dir_path.into());
+    pub fn selected_entries_in_dir<P: AsRef<Path>>(&self, abs_dir_path: P) -> Vec<DirEntry> {
+        let abs_dir_path = normalize(abs_dir_path.as_ref());
 
         let mut sel_entries: Vec<DirEntry> = vec![];
 
-        abs_dir_path.read_dir().map(|dir_entries| {
+        if let Ok(dir_entries) = abs_dir_path.read_dir() {
             for dir_entry in dir_entries {
                 if let Ok(dir_entry) = dir_entry {
                     if self.is_selected_path(dir_entry.path()) {
@@ -62,7 +62,17 @@ impl Selection {
                     }
                 }
             }
-        }).is_ok();
+        }
+
+        // abs_dir_path.read_dir().map(|dir_entries| {
+        //     for dir_entry in dir_entries {
+        //         if let Ok(dir_entry) = dir_entry {
+        //             if self.is_selected_path(dir_entry.path()) {
+        //                 sel_entries.push(dir_entry);
+        //             }
+        //         }
+        //     }
+        // }).is_ok();
 
         sel_entries
     }

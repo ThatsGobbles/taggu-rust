@@ -1,16 +1,26 @@
 // This module provides an interface to "match up" media items with metadata blocks.
 
+use std::path::{Path, PathBuf};
 use std::collections::HashSet;
+use std::borrow::Cow;
 
-use library::MediaLibrary;
+use library::{
+    MediaLibrary,
+};
+use library::sort_order::{
+    SortOrder,
+};
+use library::selection::{
+    Selection,
+};
 use metadata::{
     MetaBlock,
     MetaBlockSeq,
     MetaBlockMap,
     MetaTarget,
     Metadata,
-    SelfMetaFormat,
-    ItemMetaFormat,
+    // SelfMetaFormat,
+    // ItemMetaFormat,
 };
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -19,36 +29,52 @@ pub enum PlexTarget {
     SubItem(String),
 }
 
+impl PlexTarget {
+    pub fn resolve<P: AsRef<Path>>(&self, working_dir_path: P) -> PathBuf {
+        let working_dir_path = working_dir_path.as_ref();
+
+        match *self {
+            PlexTarget::WorkingDir => working_dir_path.to_path_buf(),
+            PlexTarget::SubItem(ref s) => working_dir_path.join(s),
+        }
+    }
+
+    // pub fn resolve<'a, P: Into<Cow<'a, Path>>>(&self, working_dir_path: P) -> Cow<'a, Path> {
+    //     self.resolve_nongeneric(working_dir_path.into())
+    // }
+
+    // fn resolve_nongeneric<'a>(&self, working_dir_path: Cow<'a, Path>) -> Cow<'a, Path> {
+    //     match *self {
+    //         PlexTarget::WorkingDir => working_dir_path,
+    //         PlexTarget::SubItem(ref s) => Cow::Owned(working_dir_path.join(s)),
+    //     }
+    // }
+}
+
 pub type PlexRecord<'a> = (PlexTarget, &'a MetaBlock);
 
-pub fn plex<'a, I, J>(metadata: &Metadata, selected_item_names: I) -> Vec<PlexRecord>
+pub fn multiplex<'a, P: AsRef<Path>>(metadata: &'a Metadata, working_dir_path: P, selection: &Selection, sort_order: SortOrder) -> Vec<PlexRecord<'a>> {
+    let item_names: Vec<_> = metadata.source_item_names(working_dir_path, selection, sort_order);
+
+    plex(metadata, &item_names)
+}
+
+fn plex<'a, I, J>(metadata: &Metadata, item_names: I) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
     match *metadata {
-        Metadata::SelfMetadata(ref smf) => plex_self_format(smf),
-        Metadata::ItemMetadata(ref imf) => plex_item_format(imf, selected_item_names)
+        Metadata::Contains(ref mb) => plex_singular(&mb),
+        Metadata::SiblingsSeq(ref mb_seq) => plex_multiple_seq(mb_seq, item_names),
+        Metadata::SiblingsMap(ref mb_map) => plex_multiple_map(mb_map, item_names),
     }
 }
 
-pub fn plex_self_format(smf: &SelfMetaFormat) -> Vec<PlexRecord> {
-    // This will yield only a single item path: the working directory path itself.
-    match *smf {
-        SelfMetaFormat::Def(ref mb) => vec![(PlexTarget::WorkingDir, mb)],
-    }
+fn plex_singular(meta_block: &MetaBlock) -> Vec<PlexRecord> {
+    vec![(PlexTarget::WorkingDir, meta_block)]
 }
 
-pub fn plex_item_format<'a, I, J>(imf: &ItemMetaFormat, selected_item_names: I) -> Vec<PlexRecord>
-where I: IntoIterator<Item = &'a J>,
-      J: AsRef<str> + 'a
-{
-    match *imf {
-        ItemMetaFormat::Seq(ref mb_seq) => plex_meta_block_seq(mb_seq, selected_item_names),
-        ItemMetaFormat::Map(ref mb_map) => plex_meta_block_map(mb_map, selected_item_names),
-    }
-}
-
-fn plex_meta_block_seq<'a, I, J>(mb_seq: &MetaBlockSeq, selected_item_names: I) -> Vec<PlexRecord>
+fn plex_multiple_seq<'a, I, J>(meta_block_seq: &MetaBlockSeq, item_names: I) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
@@ -57,20 +83,23 @@ where I: IntoIterator<Item = &'a J>,
 
     // Metadata is a sequence of meta blocks.
     // Each should correspond one-to-one with a valid item in the working dir.
-    let sorted_selected_item_names: Vec<_> = selected_item_names.into_iter().collect();
+    let item_names: Vec<_> = item_names.into_iter().collect();
 
-    if mb_seq.len() != sorted_selected_item_names.len() {
-        warn!("Lengths do not match!");
+    if meta_block_seq.len() > item_names.len() {
+        warn!("Excess metadata definitions found ({})", meta_block_seq.len() - item_names.len());
+    }
+    else if meta_block_seq.len() < item_names.len() {
+        warn!("Excess item entries found ({})", item_names.len() - meta_block_seq.len());
     }
 
-    for (item_file_name, mb) in sorted_selected_item_names.iter().zip(mb_seq) {
+    for (item_file_name, mb) in item_names.iter().zip(meta_block_seq) {
         results.push((PlexTarget::SubItem(item_file_name.as_ref().to_string()), mb));
     }
 
     results
 }
 
-fn plex_meta_block_map<'a, I, J>(mb_map: &MetaBlockMap, selected_item_names: I) -> Vec<PlexRecord>
+fn plex_multiple_map<'a, I, J>(meta_block_map: &MetaBlockMap, item_names: I) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
@@ -79,18 +108,18 @@ where I: IntoIterator<Item = &'a J>,
 
     // Metadata is a mapping of item file names to meta blocks.
     // Collect a mutable set of the expected item names.
-    let mut remaining_expected_item_names: HashSet<_> = selected_item_names.into_iter().map(AsRef::as_ref).collect();
+    let mut remaining_item_names: HashSet<_> = item_names.into_iter().map(AsRef::as_ref).collect();
 
-    for (item_file_name, mb) in mb_map {
-        // Check if the file name is valid.
+    for (item_file_name, mb) in meta_block_map {
+        // Check if the item name is valid.
         if !MediaLibrary::is_valid_item_name(&item_file_name) {
             warn!(r#"Item name "{}" is invalid"#, item_file_name);
             continue;
         }
 
         // Check if the item name from metadata is found in the set.
-        if !remaining_expected_item_names.remove(item_file_name.as_str()) {
-            warn!(r#"Item name "{}" was not found in the directory"#, item_file_name);
+        if !remaining_item_names.remove(item_file_name.as_str()) {
+            warn!(r#"Item name "{}" was not found in expected item names"#, item_file_name);
             continue;
         }
 
@@ -98,26 +127,22 @@ where I: IntoIterator<Item = &'a J>,
     }
 
     // Warn if any names remain in the set.
-    if remaining_expected_item_names.len() > 0 {
-        warn!(r#"There are unaccounted-for item names remaining"#);
+    if remaining_item_names.len() > 0 {
+        warn!(r#"Excess item entries found ({})"#, remaining_item_names.len());
     }
 
     results
 }
 
 
-// =================================================================================================
-// TESTS
-// =================================================================================================
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::{
-        plex_self_format,
-        plex_meta_block_seq,
-        plex_meta_block_map,
+        plex_singular,
+        plex_multiple_seq,
+        plex_multiple_map,
         PlexTarget,
     };
     use metadata::{
@@ -125,28 +150,26 @@ mod tests {
         MetaBlockSeq,
         MetaBlockMap,
         MetaValue,
-        SelfMetaFormat,
-        ItemMetaFormat,
+        Metadata,
     };
 
     #[test]
-    fn test_plex_self_format() {
+    fn test_plex_singular() {
         let mb: MetaBlock = btreemap![
             String::from("artist") => MetaValue::String(String::from("lapix")),
             String::from("title") => MetaValue::String(String::from("Core Signal")),
         ];
-        let smf: SelfMetaFormat = SelfMetaFormat::Def(mb.clone());
 
         let expected = vec![
             (PlexTarget::WorkingDir, &mb),
         ];
-        let produced = plex_self_format(&smf);
+        let produced = plex_singular(&mb);
 
         assert_eq!(expected, produced);
     }
 
     #[test]
-    fn test_plex_meta_block_seq() {
+    fn test_plex_multiple_seq() {
         let mb_seq: MetaBlockSeq = vec![
             btreemap![
                 String::from("artist") => MetaValue::Sequence(vec![
@@ -172,13 +195,13 @@ mod tests {
             (PlexTarget::SubItem(names[1].to_string()), &mb_seq[1]),
             (PlexTarget::SubItem(names[2].to_string()), &mb_seq[2]),
         ];
-        let produced = plex_meta_block_seq(&mb_seq, &names);
+        let produced = plex_multiple_seq(&mb_seq, &names);
 
         assert_eq!(expected, produced);
     }
 
     #[test]
-    fn test_plex_meta_block_map() {
+    fn test_plex_multiple_map() {
         let mb_map: MetaBlockMap = btreemap![
             String::from("TRACK01.flac") => btreemap![
                 String::from("artist") => MetaValue::Sequence(vec![
@@ -204,7 +227,7 @@ mod tests {
             (PlexTarget::SubItem(names[0].to_string()), &mb_map["TRACK01.flac"]),
             (PlexTarget::SubItem(names[2].to_string()), &mb_map["TRACK03.flac"]),
         ];
-        let produced: HashSet<_> = plex_meta_block_map(&mb_map, &names).into_iter().collect();
+        let produced: HashSet<_> = plex_multiple_map(&mb_map, &names).into_iter().collect();
 
         assert_eq!(expected, produced);
     }
