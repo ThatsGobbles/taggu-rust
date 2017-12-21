@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf, Component};
+use std::fmt::{Formatter, Result as FmtResult, Display};
+use std::error::Error;
 
-use glob::{glob, Pattern};
+use glob;
 
 pub fn normalize<P: AsRef<Path>>(p: P) -> PathBuf {
     let p = p.as_ref();
@@ -88,70 +90,97 @@ pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
     }
 }
 
-pub fn fuzzy_name_lookup<P: AsRef<Path>, S: AsRef<str>>(dir_path: P, file_name_stub: S) -> Option<String> {
-    let file_name_stub = file_name_stub.as_ref();
-    let dir_path = normalize(dir_path.as_ref());
+// pub fn fuzzy_name_lookup<S: AsRef<str>, P: AsRef<Path>>(file_name_stub: S, dir_path: P) -> Option<String> {
+//     let dir_path = normalize(dir_path.as_ref());
 
-    let opt_pattern = {
-        dir_path
-            .to_str()
-            .map(String::from)
-            .map(|mut s| { s.push_str(file_name_stub); s })
-            .map(|mut s| { s.push('*'); s })
-    };
+//     let opt_pattern = {
+//         dir_path
+//             .to_str()
+//             .map(String::from)
+//             .map(|mut s| { s.push_str(file_name_stub.as_ref()); s })
+//             .map(|mut s| { s.push('*'); s })
+//     };
 
-    match opt_pattern {
-        Some(pattern) => {
-            match glob(&pattern) {
-                Ok(globber) => {
-                    let mut matching_paths: Vec<PathBuf> = vec![];
+//     match opt_pattern {
+//         Some(pattern) => {
+//             match glob::glob(&pattern) {
+//                 Ok(globber) => {
+//                     let mut matching_paths: Vec<PathBuf> = vec![];
 
-                    for entry in globber {
-                        match entry {
-                            Ok(p) => { matching_paths.push(p) },
-                            Err(e) => {
-                                error!("Error when globbing paths: {}", e);
-                            },
-                        }
-                    }
+//                     for entry in globber {
+//                         match entry {
+//                             Ok(p) => { matching_paths.push(p) },
+//                             Err(e) => {
+//                                 error!("Error when globbing paths: {}", e);
+//                             },
+//                         }
+//                     }
 
-                    if matching_paths.len() < 1 {
-                        error!("No matching paths found with glob");
-                        None
-                    } else if matching_paths.len() > 1 {
-                        error!("More than one matching path ({}) found with glob", matching_paths.len());
-                        None
-                    }
-                    else {
-                        match matching_paths[0].file_name().and_then(|s| s.to_str()) {
-                            Some(fn_str) => Some(fn_str.to_string()),
-                            None => None,
-                        }
-                    }
-                },
-                Err(e) => {
-                    error!("Error when constructing glob: {}", e);
-                    None
-                },
-            }
-        },
-        None => {
-            error!("Directory path not convertible to string");
-            None
+//                     if matching_paths.len() < 1 {
+//                         error!("No matching paths found with glob");
+//                         None
+//                     } else if matching_paths.len() > 1 {
+//                         error!("More than one matching path ({}) found with glob", matching_paths.len());
+//                         None
+//                     }
+//                     else {
+//                         match matching_paths[0].file_name().and_then(|s| s.to_str()) {
+//                             Some(fn_str) => Some(fn_str.to_string()),
+//                             None => None,
+//                         }
+//                     }
+//                 },
+//                 Err(e) => {
+//                     error!("Error when constructing glob: {}", e);
+//                     None
+//                 },
+//             }
+//         },
+//         None => {
+//             error!("Directory path not convertible to string");
+//             None
+//         }
+//     }
+// }
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum FuzzyMatchError {
+    InvalidPattern(String),
+    ZeroMatches(String),
+    MultipleMatches(String, usize),
+}
+
+impl Error for FuzzyMatchError {
+    fn description(&self) -> &str {
+        match *self {
+            FuzzyMatchError::InvalidPattern(_) => "Invalid glob pattern",
+            FuzzyMatchError::ZeroMatches(_) => "Found zero matches for pattern, expected exactly one",
+            FuzzyMatchError::MultipleMatches(_, _) => "Found multiple matches for pattern, expected exactly one",
         }
     }
 }
 
-pub fn fuzzy_name_match<'a, N, H, J>(needle: N, haystack: H) -> Option<&'a str>
+impl Display for FuzzyMatchError {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match *self {
+            FuzzyMatchError::InvalidPattern(ref att_pattern) => write!(f, r#"Invalid glob pattern: "{}""#, att_pattern),
+            FuzzyMatchError::ZeroMatches(ref pattern) => write!(f, r##"Found 0 matches for pattern "{}", expected exactly one"##, pattern),
+            FuzzyMatchError::MultipleMatches(ref pattern, ref count) => write!(f, r##"Found {} matches for pattern "{}", expected exactly one"##, count, pattern),
+        }
+    }
+}
+
+pub fn fuzzy_name_match<'a, N, H, J>(needle: N, haystack: H) -> Result<&'a str, FuzzyMatchError>
 where N: AsRef<str>,
       H: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a,
 {
     // Create fnmatch-style pattern.
-    let mut pattern_str = Pattern::escape(needle.as_ref());
+    let mut pattern_str = needle.as_ref().to_string();
+    // let mut pattern_str = glob::Pattern::escape(needle.as_ref());
     pattern_str.push('*');
 
-    match Pattern::new(&pattern_str) {
+    match glob::Pattern::new(&pattern_str) {
         Ok(pattern) => {
             let matched_strs: Vec<_> = {
                 haystack
@@ -163,19 +192,19 @@ where N: AsRef<str>,
 
             if matched_strs.len() < 1 {
                 warn!("No matches found");
-                None
+                Err(FuzzyMatchError::ZeroMatches(pattern.to_string()))
             }
             else if matched_strs.len() > 1 {
                 warn!("Multiple matches found");
-                None
+                Err(FuzzyMatchError::MultipleMatches(pattern.to_string(), matched_strs.len()))
             }
             else {
-                Some(matched_strs[0])
+                Ok(matched_strs[0])
             }
         },
-        Err(e) => {
-            warn!("Error when constructing pattern: {}", e);
-            None
+        Err(_) => {
+            warn!("Error when constructing pattern: {}", pattern_str);
+            Err(FuzzyMatchError::InvalidPattern(pattern_str.to_string()))
         },
     }
 }
@@ -184,7 +213,7 @@ where N: AsRef<str>,
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use super::{normalize, is_valid_item_name, fuzzy_name_match};
+    use super::{normalize, is_valid_item_name, fuzzy_name_match, FuzzyMatchError};
 
     #[test]
     fn test_normalize() {
@@ -254,32 +283,20 @@ mod tests {
             "TRACK10.flac",
         ];
 
-        let expected = Some("TRACK00.flac");
-        let produced = fuzzy_name_match("TRACK00", &haystack);
-        assert_eq!(expected, produced);
+        let inputs_and_expected = vec![
+            ("TRACK00", Ok("TRACK00.flac"): Result<&str, FuzzyMatchError>),
+            ("TRACK00.flac", Ok("TRACK00.flac")),
+            ("TRACK07", Ok("TRACK07.flac")),
+            ("TRACK1", Ok("TRACK10.flac")),
+            ("TRACK01", Err(FuzzyMatchError::MultipleMatches(String::from("TRACK01*"), 2))),
+            ("NOTFOUND", Err(FuzzyMatchError::ZeroMatches(String::from("NOTFOUND*")))),
+            ("TRACK0", Err(FuzzyMatchError::MultipleMatches(String::from("TRACK0*"), 11))),
+            ("****", Err(FuzzyMatchError::InvalidPattern(String::from("*****")))),
+        ];
 
-        let expected = Some("TRACK00.flac");
-        let produced = fuzzy_name_match("TRACK00.flac", &haystack);
-        assert_eq!(expected, produced);
-
-        let expected = Some("TRACK07.flac");
-        let produced = fuzzy_name_match("TRACK07", &haystack);
-        assert_eq!(expected, produced);
-
-        let expected = Some("TRACK10.flac");
-        let produced = fuzzy_name_match("TRACK1", &haystack);
-        assert_eq!(expected, produced);
-
-        let expected: Option<&str> = None;
-        let produced = fuzzy_name_match("TRACK01", &haystack);
-        assert_eq!(expected, produced);
-
-        let expected: Option<&str> = None;
-        let produced = fuzzy_name_match("NOTFOUND", &haystack);
-        assert_eq!(expected, produced);
-
-        let expected: Option<&str> = None;
-        let produced = fuzzy_name_match("TRACK0", &haystack);
-        assert_eq!(expected, produced);
+        for (input, expected) in inputs_and_expected {
+            let produced = fuzzy_name_match(input, &haystack);
+            assert_eq!(expected, produced);
+        }
     }
 }

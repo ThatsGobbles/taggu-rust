@@ -110,7 +110,7 @@ impl MediaLibrary {
                     // Read meta file, and parse.
                     if let Ok(y) = read_yaml_file(&abs_meta_path) {
                         if let Some(md) = yaml_as_metadata(&y, meta_target) {
-                            let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order);
+                            let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
 
                             for (plex_target, mb) in plex_results {
                                 let item_path = plex_target.resolve(working_dir_path);
@@ -137,6 +137,8 @@ mod tests {
     use std::path::{PathBuf};
     use std::fs::{File, DirBuilder};
     use std::io::Write;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     use tempdir::TempDir;
 
@@ -201,8 +203,11 @@ mod tests {
 
         // Create sample item files and directories.
         db.create(tp.join("subdir")).unwrap();
+        sleep(Duration::from_millis(5));
         File::create(tp.join("item.flac")).unwrap();
+        sleep(Duration::from_millis(5));
         File::create(tp.join("subdir").join("subitem.flac")).unwrap();
+        sleep(Duration::from_millis(5));
 
         // Create meta files.
         let mut meta_file = File::create(tp.join("self.yml"))
@@ -276,8 +281,11 @@ mod tests {
 
         // Create sample item files and directories.
         db.create(tp.join("subdir")).unwrap();
+        sleep(Duration::from_millis(5));
         File::create(tp.join("item.flac")).unwrap();
+        sleep(Duration::from_millis(5));
         File::create(tp.join("subdir").join("subitem.flac")).unwrap();
+        sleep(Duration::from_millis(5));
 
         // Create meta files.
         let mut meta_file = File::create(tp.join("self.yml"))
@@ -352,11 +360,11 @@ mod tests {
         let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml"));
         assert_eq!(
             vec![
-                (tp.join("subdir"), btreemap![
+                (tp.join("item.flac"), btreemap![
                     String::from("artist") => MetaValue::String(String::from("lapix")),
                     String::from("title") => MetaValue::String(String::from("Black Mamba")),
                 ]),
-                (tp.join("item.flac"), btreemap![
+                (tp.join("subdir"), btreemap![
                     String::from("title") => MetaValue::String(String::from("What Is This?")),
                 ]),
             ],

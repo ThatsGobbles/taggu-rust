@@ -15,7 +15,7 @@ use metadata::{
     MetaBlockMap,
     Metadata,
 };
-use helpers::is_valid_item_name;
+use helpers::{is_valid_item_name, fuzzy_name_match};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlexTarget {
@@ -48,20 +48,27 @@ impl PlexTarget {
 
 pub type PlexRecord<'a> = (PlexTarget, &'a MetaBlock);
 
-pub fn multiplex<'a, P: AsRef<Path>>(metadata: &'a Metadata, working_dir_path: P, selection: &Selection, sort_order: SortOrder) -> Vec<PlexRecord<'a>> {
-    let item_names: Vec<_> = metadata.source_item_names(working_dir_path, selection, sort_order);
+pub fn multiplex<'a, P: AsRef<Path>>(
+    metadata: &'a Metadata,
+    working_dir_path: P,
+    selection: &Selection,
+    sort_order: SortOrder,
+    use_fuzzy_match: bool,
+    ) -> Vec<PlexRecord<'a>>
+{
+    let item_file_names: Vec<_> = metadata.source_item_names(working_dir_path, selection, sort_order);
 
-    plex(metadata, &item_names)
+    plex(metadata, &item_file_names, use_fuzzy_match)
 }
 
-fn plex<'a, I, J>(metadata: &Metadata, item_names: I) -> Vec<PlexRecord>
+fn plex<'a, I, J>(metadata: &Metadata, item_file_names: I, use_fuzzy_match: bool) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
     match *metadata {
         Metadata::Contains(ref mb) => plex_singular(&mb),
-        Metadata::SiblingsSeq(ref mb_seq) => plex_multiple_seq(mb_seq, item_names),
-        Metadata::SiblingsMap(ref mb_map) => plex_multiple_map(mb_map, item_names),
+        Metadata::SiblingsSeq(ref mb_seq) => plex_multiple_seq(mb_seq, item_file_names),
+        Metadata::SiblingsMap(ref mb_map) => plex_multiple_map(mb_map, item_file_names, use_fuzzy_match),
     }
 }
 
@@ -69,7 +76,7 @@ fn plex_singular(meta_block: &MetaBlock) -> Vec<PlexRecord> {
     vec![(PlexTarget::WorkingDir, meta_block)]
 }
 
-fn plex_multiple_seq<'a, I, J>(meta_block_seq: &MetaBlockSeq, item_names: I) -> Vec<PlexRecord>
+fn plex_multiple_seq<'a, I, J>(meta_block_seq: &MetaBlockSeq, item_file_names: I) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
@@ -78,23 +85,23 @@ where I: IntoIterator<Item = &'a J>,
 
     // Metadata is a sequence of meta blocks.
     // Each should correspond one-to-one with a valid item in the working dir.
-    let item_names: Vec<_> = item_names.into_iter().collect();
+    let item_file_names: Vec<_> = item_file_names.into_iter().collect();
 
-    if meta_block_seq.len() > item_names.len() {
-        warn!("Excess metadata definitions found ({})", meta_block_seq.len() - item_names.len());
+    if meta_block_seq.len() > item_file_names.len() {
+        warn!("Excess metadata definitions found ({})", meta_block_seq.len() - item_file_names.len());
     }
-    else if meta_block_seq.len() < item_names.len() {
-        warn!("Excess item entries found ({})", item_names.len() - meta_block_seq.len());
+    else if meta_block_seq.len() < item_file_names.len() {
+        warn!("Excess item entries found ({})", item_file_names.len() - meta_block_seq.len());
     }
 
-    for (item_file_name, mb) in item_names.iter().zip(meta_block_seq) {
+    for (item_file_name, mb) in item_file_names.iter().zip(meta_block_seq) {
         results.push((PlexTarget::SubItem(item_file_name.as_ref().to_string()), mb));
     }
 
     results
 }
 
-fn plex_multiple_map<'a, I, J>(meta_block_map: &MetaBlockMap, item_names: I) -> Vec<PlexRecord>
+fn plex_multiple_map<'a, I, J>(meta_block_map: &MetaBlockMap, item_file_names: I, use_fuzzy_match: bool) -> Vec<PlexRecord>
 where I: IntoIterator<Item = &'a J>,
       J: AsRef<str> + 'a
 {
@@ -103,27 +110,37 @@ where I: IntoIterator<Item = &'a J>,
 
     // Metadata is a mapping of item file names to meta blocks.
     // Collect a mutable set of the expected item names.
-    let mut remaining_item_names: HashSet<_> = item_names.into_iter().map(AsRef::as_ref).collect();
+    let mut remaining_item_file_names: HashSet<&str> = item_file_names.into_iter().map(AsRef::as_ref).collect();
 
-    for (item_file_name, mb) in meta_block_map {
+    for (search_name_string, mb) in meta_block_map {
         // Check if the item name is valid.
-        if !is_valid_item_name(&item_file_name) {
-            warn!(r#"Item name "{}" is invalid"#, item_file_name);
+        if !is_valid_item_name(&search_name_string) {
+            warn!(r#"Item name "{}" is invalid"#, search_name_string);
             continue;
         }
+
+        // If using a fuzzy search, check if any item in the remaining set matches.
+        let needle = if use_fuzzy_match {
+            match fuzzy_name_match(search_name_string.as_str(), &remaining_item_file_names) {
+                Ok(matched_name) => matched_name.to_string(),
+                Err(_) => { continue; },
+            }
+        } else {
+            search_name_string.clone()
+        };
 
         // Check if the item name from metadata is found in the set.
-        if !remaining_item_names.remove(item_file_name.as_str()) {
-            warn!(r#"Item name "{}" was not found in expected item names"#, item_file_name);
+        if !remaining_item_file_names.remove(needle.as_str()) {
+            warn!(r#"Item name "{}" was not found in expected item names"#, needle);
             continue;
         }
 
-        results.push((PlexTarget::SubItem(item_file_name.to_string()), mb));
+        results.push((PlexTarget::SubItem(needle), mb));
     }
 
     // Warn if any names remain in the set.
-    if remaining_item_names.len() > 0 {
-        warn!(r#"Excess item entries found ({})"#, remaining_item_names.len());
+    if remaining_item_file_names.len() > 0 {
+        warn!(r#"Excess item entries found ({})"#, remaining_item_file_names.len());
     }
 
     results
@@ -221,7 +238,7 @@ mod tests {
             (PlexTarget::SubItem(names[0].to_string()), &mb_map["TRACK01.flac"]),
             (PlexTarget::SubItem(names[2].to_string()), &mb_map["TRACK03.flac"]),
         ];
-        let produced: HashSet<_> = plex_multiple_map(&mb_map, &names).into_iter().collect();
+        let produced: HashSet<_> = plex_multiple_map(&mb_map, &names, true).into_iter().collect();
 
         assert_eq!(expected, produced);
     }
