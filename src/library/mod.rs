@@ -12,72 +12,6 @@ use error::*;
 use self::selection::Selection;
 use self::sort_order::SortOrder;
 
-// #[derive(Debug)]
-// pub enum MediaLibraryError {
-//     NotADir(PathBuf),
-//     NotAFile(PathBuf),
-//     DoesNotExist(PathBuf),
-//     IoError(IoError),
-//     InvalidSubPath(PathBuf, PathBuf),
-//     YamlError(YamlError),
-//     UnknownTarget,
-//     // NonAbsPath(path::PathBuf),
-//     // NonRelPath(path::PathBuf),
-// }
-
-// impl Error for MediaLibraryError {
-//     // LEARN: This is meant to be a static description of the error, without any dynamic creation.
-//     fn description(&self) -> &str {
-//         match *self {
-//             MediaLibraryError::NotADir(_) => "File path did not point to an existing directory",
-//             MediaLibraryError::NotAFile(_) => "File path did not point to an existing file",
-//             MediaLibraryError::DoesNotExist(_) => "File path does not exist",
-//             MediaLibraryError::IoError(ref e) => e.description(),
-//             MediaLibraryError::InvalidSubPath(_, _) => "Sub path was not a descendant of root directory",
-//             MediaLibraryError::YamlError(ref e) => e.description(),
-//             MediaLibraryError::UnknownTarget => "Meta target was not found",
-//             // MediaLibraryError::NonAbsPath(_) => "File path was expected to be absolute",
-//             // MediaLibraryError::NonRelPath(_) => "File path was expected to be relative",
-//         }
-//     }
-// }
-
-// impl Display for MediaLibraryError {
-//     // LEARN: This is the place to put dynamically-created error messages.
-//     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-//         match *self {
-//             MediaLibraryError::NotADir(ref p) => write!(f, r##"Path "{}" is not an existing directory"##, p.to_string_lossy()),
-//             MediaLibraryError::NotAFile(ref p) => write!(f, r##"Path "{}" is not an existing file"##, p.to_string_lossy()),
-//             MediaLibraryError::DoesNotExist(ref p) => write!(f, r##"Path "{}" is does not exist"##, p.to_string_lossy()),
-//             MediaLibraryError::IoError(ref e) => e.fmt(f),
-//             MediaLibraryError::InvalidSubPath(ref p, ref r) => {
-//                 write!(f, r##"Sub path "{}" is not a descendant of root directory "{}""##,
-//                     p.to_string_lossy(),
-//                     r.to_string_lossy(),
-//                 )
-//             },
-//             MediaLibraryError::YamlError(ref e) => e.fmt(f),
-//             MediaLibraryError::UnknownTarget => self.description().fmt(f),
-//             // MediaLibraryError::NonAbsPath(ref p) => write!(f, r##"Path {:?} is not absolute"##, p),
-//             // MediaLibraryError::NonRelPath(ref p) => write!(f, r##"Path {:?} is not relative"##, p),
-//         }
-//     }
-// }
-
-// impl From<IoError> for MediaLibraryError {
-//     // LEARN: This makes it easy to compose other error types into our own error type.
-//     fn from(err: IoError) -> MediaLibraryError {
-//         MediaLibraryError::IoError(err)
-//     }
-// }
-
-// impl From<YamlError> for MediaLibraryError {
-//     // LEARN: This makes it easy to compose other error types into our own error type.
-//     fn from(err: YamlError) -> MediaLibraryError {
-//         MediaLibraryError::YamlError(err)
-//     }
-// }
-
 pub struct MediaLibrary {
     root_dir: PathBuf,
     meta_target_pairs: Vec<(String, MetaTarget)>,
@@ -98,9 +32,11 @@ impl MediaLibrary {
         let root_dir = root_dir.as_ref();
         let root_dir = root_dir.canonicalize()?;
 
-        if !root_dir.is_dir() {
-            Err(ErrorKind::NotADirectory(root_dir.clone()))?
-        }
+        ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
+
+        // if !root_dir.is_dir() {
+        //     Err(ErrorKind::NotADirectory(root_dir.clone()))?
+        // }
 
         Ok(MediaLibrary {
             root_dir,
@@ -120,16 +56,18 @@ impl MediaLibrary {
         let abs_item_path = normalize(abs_item_path.as_ref());
 
         // Rule: item path must be proper.
-        if !self.is_proper_sub_path(&abs_item_path) {
-            error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_item_path.to_string_lossy(), self.root_dir.to_string_lossy());
-            Err(ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()))?
-        }
+        ensure!(self.is_proper_sub_path(&abs_item_path), ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()));
+        // if !self.is_proper_sub_path(&abs_item_path) {
+        //     error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_item_path.to_string_lossy(), self.root_dir.to_string_lossy());
+        //     Err(ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()))?
+        // }
 
         // Rule: item path must exist.
-        if !abs_item_path.exists() {
-            error!(r#"Item path "{}" does not exist"#, abs_item_path.to_string_lossy());
-            Err(ErrorKind::DoesNotExist(abs_item_path.clone()))?
-        }
+        ensure!(abs_item_path.exists(), ErrorKind::DoesNotExist(abs_item_path.clone()));
+        // if !abs_item_path.exists() {
+        //     error!(r#"Item path "{}" does not exist"#, abs_item_path.to_string_lossy());
+        //     Err(ErrorKind::DoesNotExist(abs_item_path.clone()))?
+        // }
 
         let mut results: Vec<PathBuf> = vec![];
 
@@ -147,6 +85,8 @@ impl MediaLibrary {
                 }
 
                 results.push(meta_file_path);
+            } else {
+                // TODO: Figure out what to do here.
             }
         }
 
@@ -157,24 +97,21 @@ impl MediaLibrary {
         let abs_meta_path = normalize(abs_meta_path.as_ref());
 
         // Rule: meta file path must be proper.
-        if !self.is_proper_sub_path(&abs_meta_path) {
-            error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_meta_path.to_string_lossy(), self.root_dir.to_string_lossy());
-            Err(ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()))?
-        }
+        ensure!(self.is_proper_sub_path(&abs_meta_path), ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()));
+        // if !self.is_proper_sub_path(&abs_meta_path) {
+        //     Err(ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()))?
+        // }
 
         // Rule: meta file path must exist and be a file.
-        if !abs_meta_path.is_file() {
-            error!(r#"Item path "{}" is not a valid file"#, abs_meta_path.to_string_lossy());
-            Err(ErrorKind::NotAFile(abs_meta_path.clone()))?
-        }
+        ensure!(abs_meta_path.is_file(), ErrorKind::NotAFile(abs_meta_path.clone()));
+        // if !abs_meta_path.is_file() {
+        //     Err(ErrorKind::NotAFile(abs_meta_path.clone()))?
+        // }
 
         let mut results: Vec<(PathBuf, MetaBlock)> = vec![];
 
         if let Some(working_dir_path) = abs_meta_path.parent() {
-            // // Rule: working dir path must be proper.
-            // if !self.is_proper_sub_path(&working_dir_path) {
-            //     return vec![]
-            // }
+            // TODO: Need to check if working_dir_path is proper?
 
             if let Some(found_meta_fn) = abs_meta_path.file_name().and_then(|s| s.to_str()) {
                 // We have a meta file name, now try and match it to any of the file names in meta targets.
@@ -185,7 +122,7 @@ impl MediaLibrary {
 
                         match yaml_as_metadata(&yaml_data, meta_target) {
                             Some(md) => {
-                                let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
+                                let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true)?;
 
                                 for (plex_target, mb) in plex_results {
                                     let item_path = plex_target.resolve(working_dir_path);
@@ -193,24 +130,20 @@ impl MediaLibrary {
                                     results.push((item_path, mb.clone()));
                                 }
                             },
-                            None => { println!("NO METADATA FOUND!!!"); },
+                            None => {
+                                Err(ErrorKind::InvalidMetadata)?
+                            },
                         }
-
-                        // if let Some(md) = yaml_as_metadata(&yaml_data, meta_target) {
-                        //     let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
-
-                        //     for (plex_target, mb) in plex_results {
-                        //         let item_path = plex_target.resolve(working_dir_path);
-
-                        //         results.push((item_path, mb.clone()));
-                        //     }
-                        // }
                     },
                     None => {
                         Err(ErrorKind::InvalidMetaFileName(found_meta_fn.to_string()))?
                     },
                 }
+            } else {
+                // TODO: Figure out what to do here.
             }
+        } else {
+            // TODO: Figure out what to do here.
         }
 
         Ok(results)

@@ -24,7 +24,7 @@ pub fn yield_field<P: AsRef<Path>, S: AsRef<str>>(
         // Open this meta file path and see if it contains the field we are looking for.
         let records = media_library.item_fps_from_meta_fp(&meta_file_path);
 
-        println!("{:?}", records);
+        println!("{:#?}", records);
 
         // for record in records {
         //     println!("{:?}", record);
@@ -51,10 +51,10 @@ mod tests {
             SortOrder::Name,
         ).expect("Unable to create media library");
 
-        println!("\n\n");
+        // println!("\n\n");
         yield_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/1.01. Nhato - Gotta Get Down.flac"), "COOL");
-        println!("---------------------");
-        yield_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS"), "COOL");
-        println!("\n\n");
+        // println!("---------------------");
+        // yield_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS"), "COOL");
+        // println!("\n\n");
     }
 }

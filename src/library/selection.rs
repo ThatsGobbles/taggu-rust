@@ -4,6 +4,7 @@ use std::ffi::OsStr;
 use std::fs::DirEntry;
 
 use helpers::normalize;
+use error::*;
 
 #[derive(Debug, Clone)]
 pub enum Selection {
@@ -49,22 +50,24 @@ impl Selection {
         }
     }
 
-    pub fn selected_entries_in_dir<P: AsRef<Path>>(&self, abs_dir_path: P) -> Vec<DirEntry> {
+    pub fn selected_entries_in_dir<P: AsRef<Path>>(&self, abs_dir_path: P) -> Result<Vec<DirEntry>> {
         let abs_dir_path = normalize(abs_dir_path.as_ref());
 
         let mut sel_entries: Vec<DirEntry> = vec![];
 
-        if let Ok(dir_entries) = abs_dir_path.read_dir() {
-            for dir_entry in dir_entries {
-                if let Ok(dir_entry) = dir_entry {
-                    if self.is_selected_path(dir_entry.path()) {
-                        sel_entries.push(dir_entry);
-                    }
+        let dir_entries = abs_dir_path.read_dir()?;
+
+        for dir_entry in dir_entries {
+            if let Ok(dir_entry) = dir_entry {
+                if self.is_selected_path(dir_entry.path()) {
+                    sel_entries.push(dir_entry);
                 }
+            } else {
+                // TODO: Figure out what to do here.
             }
         }
 
-        sel_entries
+        Ok(sel_entries)
     }
 
     // TODO: Create macros/functions to help with selection creation.

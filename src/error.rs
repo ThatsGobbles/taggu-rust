@@ -26,6 +26,10 @@ error_chain!{
             description("meta file did not contain any data")
             display("meta file did not contain any data: '{}'", p.to_string_lossy())
         }
+        InvalidMetadata {
+            description("invalid metadata format")
+            display("invalid metadata format")
+        }
     }
 
     foreign_links {

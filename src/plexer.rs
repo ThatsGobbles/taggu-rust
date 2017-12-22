@@ -3,12 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
-use library::sort_order::{
-    SortOrder,
-};
-use library::selection::{
-    Selection,
-};
+use library::sort_order::SortOrder;
+use library::selection::Selection;
 use metadata::{
     MetaBlock,
     MetaBlockSeq,
@@ -16,6 +12,7 @@ use metadata::{
     Metadata,
 };
 use helpers::{is_valid_item_name, fuzzy_name_match};
+use error::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlexTarget {
@@ -54,11 +51,11 @@ pub fn multiplex<'a, P: AsRef<Path>>(
     selection: &Selection,
     sort_order: SortOrder,
     use_fuzzy_match: bool,
-    ) -> Vec<PlexRecord<'a>>
+    ) -> Result<Vec<PlexRecord<'a>>>
 {
-    let item_file_names: Vec<_> = metadata.source_item_names(working_dir_path, selection, sort_order);
+    let item_file_names: Vec<_> = metadata.source_item_names(working_dir_path, selection, sort_order)?;
 
-    plex(metadata, &item_file_names, use_fuzzy_match)
+    Ok(plex(metadata, &item_file_names, use_fuzzy_match))
 }
 
 fn plex<'a, I, J>(metadata: &Metadata, item_file_names: I, use_fuzzy_match: bool) -> Vec<PlexRecord>
@@ -88,10 +85,10 @@ where I: IntoIterator<Item = &'a J>,
     let item_file_names: Vec<_> = item_file_names.into_iter().collect();
 
     if meta_block_seq.len() > item_file_names.len() {
-        warn!("Excess metadata definitions found ({})", meta_block_seq.len() - item_file_names.len());
+        warn!("excess metadata definitions found: {}", meta_block_seq.len() - item_file_names.len());
     }
     else if meta_block_seq.len() < item_file_names.len() {
-        warn!("Excess item entries found ({})", item_file_names.len() - meta_block_seq.len());
+        warn!("excess item entries found: {}", item_file_names.len() - meta_block_seq.len());
     }
 
     for (item_file_name, mb) in item_file_names.iter().zip(meta_block_seq) {
@@ -115,7 +112,7 @@ where I: IntoIterator<Item = &'a J>,
     for (search_name_string, mb) in meta_block_map {
         // Check if the item name is valid.
         if !is_valid_item_name(&search_name_string) {
-            warn!(r#"Item name "{}" is invalid"#, search_name_string);
+            warn!("invalid item name: '{}'", search_name_string);
             continue;
         }
 
@@ -131,7 +128,7 @@ where I: IntoIterator<Item = &'a J>,
 
         // Check if the item name from metadata is found in the set.
         if !remaining_item_file_names.remove(needle.as_str()) {
-            warn!(r#"Item name "{}" was not found in expected item names"#, needle);
+            warn!("unexpected item name: '{}'", needle);
             continue;
         }
 
@@ -140,7 +137,7 @@ where I: IntoIterator<Item = &'a J>,
 
     // Warn if any names remain in the set.
     if remaining_item_file_names.len() > 0 {
-        warn!(r#"Excess item entries found ({})"#, remaining_item_file_names.len());
+        warn!("excess item entries found: {}", remaining_item_file_names.len());
     }
 
     results

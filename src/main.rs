@@ -12,7 +12,6 @@ extern crate glob;
 
 mod library;
 mod helpers;
-mod generator;
 mod yaml;
 mod metadata;
 mod plexer;

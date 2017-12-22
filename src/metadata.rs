@@ -5,6 +5,7 @@ use std::fs::DirEntry;
 use helpers::normalize;
 use library::sort_order::SortOrder;
 use library::selection::Selection;
+use error::*;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub enum MetaKey {
@@ -37,9 +38,9 @@ impl MetaTarget {
 
         match *self {
             MetaTarget::Siblings => abs_meta_path.parent().map(|f| f.to_path_buf()),
-            MetaTarget::Contains => {
-                if abs_meta_path.is_dir() { Some(abs_meta_path) }
-                else { None }
+            MetaTarget::Contains => match abs_meta_path.is_dir() {
+                true => Some(abs_meta_path),
+                false => None,
             },
         }
     }
@@ -59,28 +60,28 @@ pub enum Metadata {
 }
 
 impl Metadata {
-    fn get_relevant_dir_entries<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Vec<DirEntry> {
+    fn get_relevant_dir_entries<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Result<Vec<DirEntry>> {
         let working_dir_path = working_dir_path.as_ref();
 
-        let mut dir_entries = selection.selected_entries_in_dir(working_dir_path);
+        let mut dir_entries = selection.selected_entries_in_dir(working_dir_path)?;
 
         if let Some(sort_order) = opt_sort_order {
             dir_entries.sort_unstable_by(|a, b| sort_order.path_sort_cmp(a.path(), b.path()));
         }
 
-        dir_entries
+        Ok(dir_entries)
     }
 
-    fn get_relevant_paths<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Vec<PathBuf> {
-        Metadata::get_relevant_dir_entries(working_dir_path, selection, opt_sort_order).iter().map(|e| e.path()).collect()
+    fn get_relevant_paths<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Result<Vec<PathBuf>> {
+        Ok(Metadata::get_relevant_dir_entries(working_dir_path, selection, opt_sort_order)?.iter().map(|e| e.path()).collect())
     }
 
-    fn get_relevant_names<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Vec<String> {
-        Metadata::get_relevant_paths(working_dir_path, selection, opt_sort_order)
+    fn get_relevant_names<P: AsRef<Path>>(working_dir_path: P, selection: &Selection, opt_sort_order: Option<SortOrder>) -> Result<Vec<String>> {
+        Ok(Metadata::get_relevant_paths(working_dir_path, selection, opt_sort_order)?
             .iter()
             .filter_map(|p| p.file_name())
             .map(|o_str| o_str.to_string_lossy().to_string())
-            .collect()
+            .collect())
     }
 
     pub fn source_item_names<P: AsRef<Path>>(
@@ -88,10 +89,10 @@ impl Metadata {
         working_dir_path: P,
         selection: &Selection,
         sort_order: SortOrder,
-        ) -> Vec<String>
+        ) -> Result<Vec<String>>
     {
         match *self {
-            Metadata::Contains(_) => vec![],
+            Metadata::Contains(_) => Ok(vec![]),
             Metadata::SiblingsSeq(_) => Metadata::get_relevant_names(working_dir_path, selection, Some(sort_order)),
             Metadata::SiblingsMap(_) => Metadata::get_relevant_names(working_dir_path, selection, None),
         }
