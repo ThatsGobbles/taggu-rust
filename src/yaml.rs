@@ -1,12 +1,9 @@
 use std::fs::File;
-use std::io::{Read, Error as IoError};
+use std::io::Read;
 use std::path::Path;
 use std::collections::BTreeMap;
-use std::error::Error;
-use std::fmt::{Formatter, Result as FmtResult, Display};
 
 use yaml_rust::{YamlLoader, Yaml};
-use yaml_rust::scanner::ScanError;
 
 use metadata::{
     Metadata,
@@ -16,52 +13,12 @@ use metadata::{
     MetaBlock,
     MetaBlockSeq,
     MetaBlockMap,
-    // SelfMetaFormat,
-    // ItemMetaFormat,
 };
+use error::*;
 
-#[derive(Debug)]
-pub enum YamlError {
-    IoError(IoError),
-    ScanError(ScanError),
-    NoDocuments,
-}
-
-impl Error for YamlError {
-    fn description(&self) -> &str {
-        match *self {
-            YamlError::IoError(ref e) => e.description(),
-            YamlError::ScanError(ref y) => y.description(),
-            YamlError::NoDocuments => "No documents found in YAML file",
-        }
-    }
-}
-
-impl Display for YamlError {
-    // This is the place to put dynamically-created error messages.
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match *self {
-            YamlError::IoError(ref e) => e.fmt(f),
-            YamlError::ScanError(ref y) => y.fmt(f),
-            YamlError::NoDocuments => self.description().fmt(f),
-        }
-    }
-}
-
-impl From<IoError> for YamlError {
-    fn from(err: IoError) -> YamlError {
-        YamlError::IoError(err)
-    }
-}
-
-impl From<ScanError> for YamlError {
-    fn from(err: ScanError) -> YamlError {
-        YamlError::ScanError(err)
-    }
-}
-
-pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml, YamlError> {
+pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml> {
     // Opens a YAML file on disk and reads the first document.
+    let yaml_fp = yaml_fp.as_ref();
     let mut f = File::open(yaml_fp)?;
 
     let mut buffer = String::new();
@@ -70,7 +27,7 @@ pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml, YamlError> {
     let yaml_docs: Vec<Yaml> = YamlLoader::load_from_str(&buffer)?;
 
     if yaml_docs.len() < 1 {
-        return Err(YamlError::NoDocuments)
+        Err(ErrorKind::EmptyMetaFile(yaml_fp.to_path_buf()))?
     }
 
     Ok(yaml_docs[0].clone())

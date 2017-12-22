@@ -2,83 +2,81 @@ pub mod selection;
 pub mod sort_order;
 
 use std::path::{Path, PathBuf};
-use std::error::Error;
-use std::io::Error as IoError;
-use std::fmt::{Formatter, Result as FmtResult, Display};
 
 use helpers::normalize;
 use metadata::{MetaBlock, MetaTarget};
-use yaml::{read_yaml_file, yaml_as_metadata, YamlError};
+use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
+use error::*;
 
 use self::selection::Selection;
 use self::sort_order::SortOrder;
 
-#[derive(Debug)]
-pub enum MediaLibraryError {
-    NotADir(PathBuf),
-    NotAFile(PathBuf),
-    DoesNotExist(PathBuf),
-    IoError(IoError),
-    InvalidSubPath(PathBuf, PathBuf),
-    YamlError(YamlError),
-    UnknownTarget,
-    // NonAbsPath(path::PathBuf),
-    // NonRelPath(path::PathBuf),
-}
+// #[derive(Debug)]
+// pub enum MediaLibraryError {
+//     NotADir(PathBuf),
+//     NotAFile(PathBuf),
+//     DoesNotExist(PathBuf),
+//     IoError(IoError),
+//     InvalidSubPath(PathBuf, PathBuf),
+//     YamlError(YamlError),
+//     UnknownTarget,
+//     // NonAbsPath(path::PathBuf),
+//     // NonRelPath(path::PathBuf),
+// }
 
-impl Error for MediaLibraryError {
-    // LEARN: This is meant to be a static description of the error, without any dynamic creation.
-    fn description(&self) -> &str {
-        match *self {
-            MediaLibraryError::NotADir(_) => "File path did not point to an existing directory",
-            MediaLibraryError::NotAFile(_) => "File path did not point to an existing file",
-            MediaLibraryError::DoesNotExist(_) => "File path does not exist",
-            MediaLibraryError::IoError(ref e) => e.description(),
-            MediaLibraryError::InvalidSubPath(_, _) => "Sub path was not a descendant of root directory",
-            MediaLibraryError::YamlError(ref e) => e.description(),
-            MediaLibraryError::UnknownTarget => "Meta target was not found",
-            // MediaLibraryError::NonAbsPath(_) => "File path was expected to be absolute",
-            // MediaLibraryError::NonRelPath(_) => "File path was expected to be relative",
-        }
-    }
-}
+// impl Error for MediaLibraryError {
+//     // LEARN: This is meant to be a static description of the error, without any dynamic creation.
+//     fn description(&self) -> &str {
+//         match *self {
+//             MediaLibraryError::NotADir(_) => "File path did not point to an existing directory",
+//             MediaLibraryError::NotAFile(_) => "File path did not point to an existing file",
+//             MediaLibraryError::DoesNotExist(_) => "File path does not exist",
+//             MediaLibraryError::IoError(ref e) => e.description(),
+//             MediaLibraryError::InvalidSubPath(_, _) => "Sub path was not a descendant of root directory",
+//             MediaLibraryError::YamlError(ref e) => e.description(),
+//             MediaLibraryError::UnknownTarget => "Meta target was not found",
+//             // MediaLibraryError::NonAbsPath(_) => "File path was expected to be absolute",
+//             // MediaLibraryError::NonRelPath(_) => "File path was expected to be relative",
+//         }
+//     }
+// }
 
-impl Display for MediaLibraryError {
-    // LEARN: This is the place to put dynamically-created error messages.
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match *self {
-            MediaLibraryError::NotADir(ref p) => write!(f, r##"Path "{}" is not an existing directory"##, p.to_string_lossy()),
-            MediaLibraryError::NotAFile(ref p) => write!(f, r##"Path "{}" is not an existing file"##, p.to_string_lossy()),
-            MediaLibraryError::DoesNotExist(ref p) => write!(f, r##"Path "{}" is does not exist"##, p.to_string_lossy()),
-            MediaLibraryError::IoError(ref e) => e.fmt(f),
-            MediaLibraryError::InvalidSubPath(ref p, ref r) => {
-                write!(f, r##"Sub path "{}" is not a descendant of root directory "{}""##,
-                    p.to_string_lossy(),
-                    r.to_string_lossy(),
-                )
-            },
-            MediaLibraryError::YamlError(ref e) => e.fmt(f),
-            MediaLibraryError::UnknownTarget => self.description().fmt(f),
-            // MediaLibraryError::NonAbsPath(ref p) => write!(f, r##"Path {:?} is not absolute"##, p),
-            // MediaLibraryError::NonRelPath(ref p) => write!(f, r##"Path {:?} is not relative"##, p),
-        }
-    }
-}
+// impl Display for MediaLibraryError {
+//     // LEARN: This is the place to put dynamically-created error messages.
+//     fn fmt(&self, f: &mut Formatter) -> FmtResult {
+//         match *self {
+//             MediaLibraryError::NotADir(ref p) => write!(f, r##"Path "{}" is not an existing directory"##, p.to_string_lossy()),
+//             MediaLibraryError::NotAFile(ref p) => write!(f, r##"Path "{}" is not an existing file"##, p.to_string_lossy()),
+//             MediaLibraryError::DoesNotExist(ref p) => write!(f, r##"Path "{}" is does not exist"##, p.to_string_lossy()),
+//             MediaLibraryError::IoError(ref e) => e.fmt(f),
+//             MediaLibraryError::InvalidSubPath(ref p, ref r) => {
+//                 write!(f, r##"Sub path "{}" is not a descendant of root directory "{}""##,
+//                     p.to_string_lossy(),
+//                     r.to_string_lossy(),
+//                 )
+//             },
+//             MediaLibraryError::YamlError(ref e) => e.fmt(f),
+//             MediaLibraryError::UnknownTarget => self.description().fmt(f),
+//             // MediaLibraryError::NonAbsPath(ref p) => write!(f, r##"Path {:?} is not absolute"##, p),
+//             // MediaLibraryError::NonRelPath(ref p) => write!(f, r##"Path {:?} is not relative"##, p),
+//         }
+//     }
+// }
 
-impl From<IoError> for MediaLibraryError {
-    // LEARN: This makes it easy to compose other error types into our own error type.
-    fn from(err: IoError) -> MediaLibraryError {
-        MediaLibraryError::IoError(err)
-    }
-}
+// impl From<IoError> for MediaLibraryError {
+//     // LEARN: This makes it easy to compose other error types into our own error type.
+//     fn from(err: IoError) -> MediaLibraryError {
+//         MediaLibraryError::IoError(err)
+//     }
+// }
 
-impl From<YamlError> for MediaLibraryError {
-    // LEARN: This makes it easy to compose other error types into our own error type.
-    fn from(err: YamlError) -> MediaLibraryError {
-        MediaLibraryError::YamlError(err)
-    }
-}
+// impl From<YamlError> for MediaLibraryError {
+//     // LEARN: This makes it easy to compose other error types into our own error type.
+//     fn from(err: YamlError) -> MediaLibraryError {
+//         MediaLibraryError::YamlError(err)
+//     }
+// }
 
 pub struct MediaLibrary {
     root_dir: PathBuf,
@@ -95,11 +93,13 @@ impl MediaLibrary {
             meta_target_pairs: Vec<(String, MetaTarget)>,
             selection: Selection,
             sort_order: SortOrder,
-            ) -> Result<MediaLibrary, MediaLibraryError> {
-        let root_dir = try!(root_dir.as_ref().canonicalize());
+            ) -> Result<MediaLibrary>
+    {
+        let root_dir = root_dir.as_ref();
+        let root_dir = root_dir.canonicalize()?;
 
         if !root_dir.is_dir() {
-            return Err(MediaLibraryError::NotADir(root_dir))
+            Err(ErrorKind::NotADirectory(root_dir.clone()))?
         }
 
         Ok(MediaLibrary {
@@ -116,19 +116,19 @@ impl MediaLibrary {
         abs_sub_path.starts_with(&self.root_dir)
     }
 
-    pub fn meta_fps_from_item_fp<P: AsRef<Path>>(&self, abs_item_path: P) -> Result<Vec<PathBuf>, MediaLibraryError> {
+    pub fn meta_fps_from_item_fp<P: AsRef<Path>>(&self, abs_item_path: P) -> Result<Vec<PathBuf>> {
         let abs_item_path = normalize(abs_item_path.as_ref());
 
         // Rule: item path must be proper.
         if !self.is_proper_sub_path(&abs_item_path) {
             error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_item_path.to_string_lossy(), self.root_dir.to_string_lossy());
-            return Err(MediaLibraryError::InvalidSubPath(abs_item_path, self.root_dir.clone()))
+            Err(ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()))?
         }
 
         // Rule: item path must exist.
         if !abs_item_path.exists() {
             error!(r#"Item path "{}" does not exist"#, abs_item_path.to_string_lossy());
-            return Err(MediaLibraryError::DoesNotExist(abs_item_path))
+            Err(ErrorKind::DoesNotExist(abs_item_path.clone()))?
         }
 
         let mut results: Vec<PathBuf> = vec![];
@@ -153,19 +153,19 @@ impl MediaLibrary {
         Ok(results)
     }
 
-    pub fn item_fps_from_meta_fp<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<(PathBuf, MetaBlock)>, MediaLibraryError> {
+    pub fn item_fps_from_meta_fp<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<(PathBuf, MetaBlock)>> {
         let abs_meta_path = normalize(abs_meta_path.as_ref());
 
         // Rule: meta file path must be proper.
         if !self.is_proper_sub_path(&abs_meta_path) {
             error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_meta_path.to_string_lossy(), self.root_dir.to_string_lossy());
-            return Err(MediaLibraryError::InvalidSubPath(abs_meta_path, self.root_dir.clone()))
+            Err(ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()))?
         }
 
         // Rule: meta file path must exist and be a file.
         if !abs_meta_path.is_file() {
             error!(r#"Item path "{}" is not a valid file"#, abs_meta_path.to_string_lossy());
-            return Err(MediaLibraryError::NotAFile(abs_meta_path))
+            Err(ErrorKind::NotAFile(abs_meta_path.clone()))?
         }
 
         let mut results: Vec<(PathBuf, MetaBlock)> = vec![];
@@ -207,7 +207,7 @@ impl MediaLibrary {
                         // }
                     },
                     None => {
-                        return Err(MediaLibraryError::UnknownTarget)
+                        Err(ErrorKind::InvalidMetaFileName(found_meta_fn.to_string()))?
                     },
                 }
             }

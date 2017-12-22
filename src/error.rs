@@ -22,5 +22,14 @@ error_chain!{
             description("meta file name is invalid"),
             display("meta file name is invalid: '{}'", s),
         }
+        EmptyMetaFile(p: PathBuf) {
+            description("meta file did not contain any data")
+            display("meta file did not contain any data: '{}'", p.to_string_lossy())
+        }
+    }
+
+    foreign_links {
+        Io(::std::io::Error);
+        Yaml(::yaml_rust::scanner::ScanError);
     }
 }
