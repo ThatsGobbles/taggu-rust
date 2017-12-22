@@ -2,15 +2,83 @@ pub mod selection;
 pub mod sort_order;
 
 use std::path::{Path, PathBuf};
+use std::error::Error;
+use std::io::Error as IoError;
+use std::fmt::{Formatter, Result as FmtResult, Display};
 
-use error::MediaLibraryError;
 use helpers::normalize;
 use metadata::{MetaBlock, MetaTarget};
-use yaml::{read_yaml_file, yaml_as_metadata};
+use yaml::{read_yaml_file, yaml_as_metadata, YamlError};
 use plexer::multiplex;
 
 use self::selection::Selection;
 use self::sort_order::SortOrder;
+
+#[derive(Debug)]
+pub enum MediaLibraryError {
+    NotADir(PathBuf),
+    NotAFile(PathBuf),
+    DoesNotExist(PathBuf),
+    IoError(IoError),
+    InvalidSubPath(PathBuf, PathBuf),
+    YamlError(YamlError),
+    UnknownTarget,
+    // NonAbsPath(path::PathBuf),
+    // NonRelPath(path::PathBuf),
+}
+
+impl Error for MediaLibraryError {
+    // LEARN: This is meant to be a static description of the error, without any dynamic creation.
+    fn description(&self) -> &str {
+        match *self {
+            MediaLibraryError::NotADir(_) => "File path did not point to an existing directory",
+            MediaLibraryError::NotAFile(_) => "File path did not point to an existing file",
+            MediaLibraryError::DoesNotExist(_) => "File path does not exist",
+            MediaLibraryError::IoError(ref e) => e.description(),
+            MediaLibraryError::InvalidSubPath(_, _) => "Sub path was not a descendant of root directory",
+            MediaLibraryError::YamlError(ref e) => e.description(),
+            MediaLibraryError::UnknownTarget => "Meta target was not found",
+            // MediaLibraryError::NonAbsPath(_) => "File path was expected to be absolute",
+            // MediaLibraryError::NonRelPath(_) => "File path was expected to be relative",
+        }
+    }
+}
+
+impl Display for MediaLibraryError {
+    // LEARN: This is the place to put dynamically-created error messages.
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match *self {
+            MediaLibraryError::NotADir(ref p) => write!(f, r##"Path "{}" is not an existing directory"##, p.to_string_lossy()),
+            MediaLibraryError::NotAFile(ref p) => write!(f, r##"Path "{}" is not an existing file"##, p.to_string_lossy()),
+            MediaLibraryError::DoesNotExist(ref p) => write!(f, r##"Path "{}" is does not exist"##, p.to_string_lossy()),
+            MediaLibraryError::IoError(ref e) => e.fmt(f),
+            MediaLibraryError::InvalidSubPath(ref p, ref r) => {
+                write!(f, r##"Sub path "{}" is not a descendant of root directory "{}""##,
+                    p.to_string_lossy(),
+                    r.to_string_lossy(),
+                )
+            },
+            MediaLibraryError::YamlError(ref e) => e.fmt(f),
+            MediaLibraryError::UnknownTarget => self.description().fmt(f),
+            // MediaLibraryError::NonAbsPath(ref p) => write!(f, r##"Path {:?} is not absolute"##, p),
+            // MediaLibraryError::NonRelPath(ref p) => write!(f, r##"Path {:?} is not relative"##, p),
+        }
+    }
+}
+
+impl From<IoError> for MediaLibraryError {
+    // LEARN: This makes it easy to compose other error types into our own error type.
+    fn from(err: IoError) -> MediaLibraryError {
+        MediaLibraryError::IoError(err)
+    }
+}
+
+impl From<YamlError> for MediaLibraryError {
+    // LEARN: This makes it easy to compose other error types into our own error type.
+    fn from(err: YamlError) -> MediaLibraryError {
+        MediaLibraryError::YamlError(err)
+    }
+}
 
 pub struct MediaLibrary {
     root_dir: PathBuf,
@@ -48,17 +116,19 @@ impl MediaLibrary {
         abs_sub_path.starts_with(&self.root_dir)
     }
 
-    pub fn meta_fps_from_item_fp<P: AsRef<Path>>(&self, abs_item_path: P) -> Vec<PathBuf> {
+    pub fn meta_fps_from_item_fp<P: AsRef<Path>>(&self, abs_item_path: P) -> Result<Vec<PathBuf>, MediaLibraryError> {
         let abs_item_path = normalize(abs_item_path.as_ref());
 
         // Rule: item path must be proper.
         if !self.is_proper_sub_path(&abs_item_path) {
-            return vec![]
+            error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_item_path.to_string_lossy(), self.root_dir.to_string_lossy());
+            return Err(MediaLibraryError::InvalidSubPath(abs_item_path, self.root_dir.clone()))
         }
 
         // Rule: item path must exist.
         if !abs_item_path.exists() {
-            return vec![]
+            error!(r#"Item path "{}" does not exist"#, abs_item_path.to_string_lossy());
+            return Err(MediaLibraryError::DoesNotExist(abs_item_path))
         }
 
         let mut results: Vec<PathBuf> = vec![];
@@ -80,50 +150,70 @@ impl MediaLibrary {
             }
         }
 
-        results
+        Ok(results)
     }
 
-    pub fn item_fps_from_meta_fp<P: AsRef<Path>>(&self, abs_meta_path: P) -> Vec<(PathBuf, MetaBlock)> {
+    pub fn item_fps_from_meta_fp<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<(PathBuf, MetaBlock)>, MediaLibraryError> {
         let abs_meta_path = normalize(abs_meta_path.as_ref());
 
         // Rule: meta file path must be proper.
         if !self.is_proper_sub_path(&abs_meta_path) {
-            return vec![]
+            error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_meta_path.to_string_lossy(), self.root_dir.to_string_lossy());
+            return Err(MediaLibraryError::InvalidSubPath(abs_meta_path, self.root_dir.clone()))
         }
 
         // Rule: meta file path must exist and be a file.
         if !abs_meta_path.is_file() {
-            return vec![]
+            error!(r#"Item path "{}" is not a valid file"#, abs_meta_path.to_string_lossy());
+            return Err(MediaLibraryError::NotAFile(abs_meta_path))
         }
 
         let mut results: Vec<(PathBuf, MetaBlock)> = vec![];
 
         if let Some(working_dir_path) = abs_meta_path.parent() {
-            // Rule: working dir path must be proper.
-            if !self.is_proper_sub_path(&working_dir_path) {
-                return vec![]
-            }
+            // // Rule: working dir path must be proper.
+            // if !self.is_proper_sub_path(&working_dir_path) {
+            //     return vec![]
+            // }
 
             if let Some(found_meta_fn) = abs_meta_path.file_name().and_then(|s| s.to_str()) {
                 // We have a meta file name, now try and match it to any of the file names in meta targets.
-                if let Some(&(_, ref meta_target)) = self.meta_target_pairs.iter().find(|&&(ref s, _)| *s == found_meta_fn) {
-                    // Read meta file, and parse.
-                    if let Ok(y) = read_yaml_file(&abs_meta_path) {
-                        if let Some(md) = yaml_as_metadata(&y, meta_target) {
-                            let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
+                match self.meta_target_pairs.iter().find(|&&(ref s, _)| *s == found_meta_fn) {
+                    Some(&(_, ref meta_target)) => {
+                        // Read meta file, and parse.
+                        let yaml_data = read_yaml_file(&abs_meta_path)?;
 
-                            for (plex_target, mb) in plex_results {
-                                let item_path = plex_target.resolve(working_dir_path);
+                        match yaml_as_metadata(&yaml_data, meta_target) {
+                            Some(md) => {
+                                let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
 
-                                results.push((item_path, mb.clone()));
-                            }
+                                for (plex_target, mb) in plex_results {
+                                    let item_path = plex_target.resolve(working_dir_path);
+
+                                    results.push((item_path, mb.clone()));
+                                }
+                            },
+                            None => { println!("NO METADATA FOUND!!!"); },
                         }
-                    }
+
+                        // if let Some(md) = yaml_as_metadata(&yaml_data, meta_target) {
+                        //     let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true);
+
+                        //     for (plex_target, mb) in plex_results {
+                        //         let item_path = plex_target.resolve(working_dir_path);
+
+                        //         results.push((item_path, mb.clone()));
+                        //     }
+                        // }
+                    },
+                    None => {
+                        return Err(MediaLibraryError::UnknownTarget)
+                    },
                 }
             }
         }
 
-        results
+        Ok(results)
     }
 }
 
@@ -237,19 +327,18 @@ mod tests {
         ).expect("Unable to create media library");
 
         // Run tests.
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp);
+        let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp).expect("Unable to get meta fps");
         assert_eq!(vec![tp.join("self.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("item.flac"));
+        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("item.flac")).expect("Unable to get meta fps");
         assert_eq!(vec![tp.join("item.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir"));
+        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir")).expect("Unable to get meta fps");
         assert_eq!(vec![tp.join("subdir").join("self.yml"), tp.join("item.yml")], found);
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("DOES_NOT_EXIST"));
-        assert_eq!(Vec::<PathBuf>::new(), found);
+        assert!(media_lib.meta_fps_from_item_fp(tp.join("DOES_NOT_EXIST")).is_err());
 
-        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir").join("subitem.flac"));
+        let found: Vec<_> = media_lib.meta_fps_from_item_fp(tp.join("subdir").join("subitem.flac")).expect("Unable to get meta fps");
         assert_eq!(Vec::<PathBuf>::new(), found);
     }
 
@@ -328,7 +417,7 @@ mod tests {
         ).expect("Unable to create media library");
 
         // Run tests.
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml"));
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).expect("Unable to get item fps");
         assert_eq!(
             vec![
                 (tp.to_path_buf(), btreemap![
@@ -343,7 +432,7 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("item_map.yml"));
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("item_map.yml")).expect("Unable to get item fps");
         assert_eq!(
             vec![
                 (tp.join("item.flac"), btreemap![
@@ -357,7 +446,7 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml"));
+        let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml")).expect("Unable to get item fps");
         assert_eq!(
             vec![
                 (tp.join("item.flac"), btreemap![
@@ -371,7 +460,7 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("subdir").join("self.yml"));
+        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("subdir").join("self.yml")).expect("Unable to get item fps");
         assert_eq!(
             vec![
                 (tp.join("subdir"), btreemap![
@@ -382,8 +471,7 @@ mod tests {
             found
         );
 
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST"));
-        assert_eq!(Vec::<(PathBuf, MetaBlock)>::new(), found);
+        assert!(media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).is_err());
     }
 
     // ASSOCIATED FUNCTIONS

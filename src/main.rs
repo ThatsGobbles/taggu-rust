@@ -10,7 +10,6 @@ extern crate yaml_rust;
 extern crate glob;
 
 mod library;
-mod error;
 mod helpers;
 mod generator;
 mod yaml;

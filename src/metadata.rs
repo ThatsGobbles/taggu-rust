@@ -21,23 +21,24 @@ pub enum MetaValue {
 }
 
 /// Represents one or more item targets that a given set of metadata provides data for.
+#[derive(Debug)]
 pub enum MetaTarget {
     Contains,
     Siblings,
 }
 
 impl MetaTarget {
-    pub fn target_dir_path<P: AsRef<Path>>(&self, abs_item_path: P) -> Option<PathBuf> {
-        let abs_item_path = normalize(&abs_item_path.as_ref());
+    pub fn target_dir_path<P: AsRef<Path>>(&self, abs_meta_path: P) -> Option<PathBuf> {
+        let abs_meta_path = normalize(&abs_meta_path.as_ref());
 
-        if !abs_item_path.exists() {
+        if !abs_meta_path.exists() {
             return None
         }
 
         match *self {
-            MetaTarget::Siblings => abs_item_path.parent().map(|f| f.to_path_buf()),
+            MetaTarget::Siblings => abs_meta_path.parent().map(|f| f.to_path_buf()),
             MetaTarget::Contains => {
-                if abs_item_path.is_dir() { Some(abs_item_path) }
+                if abs_meta_path.is_dir() { Some(abs_meta_path) }
                 else { None }
             },
         }
@@ -50,6 +51,7 @@ pub type MetaBlockMap = BTreeMap<String, MetaBlock>;
 
 /// A data structure-level representation of all possible metadata types and their formats.
 /// This is intended to be independent of the text-level representation of the metadata.
+#[derive(Debug)]
 pub enum Metadata {
     Contains(MetaBlock),
     SiblingsSeq(MetaBlockSeq),
