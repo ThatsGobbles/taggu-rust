@@ -90,59 +90,6 @@ pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
     }
 }
 
-// pub fn fuzzy_name_lookup<S: AsRef<str>, P: AsRef<Path>>(file_name_stub: S, dir_path: P) -> Option<String> {
-//     let dir_path = normalize(dir_path.as_ref());
-
-//     let opt_pattern = {
-//         dir_path
-//             .to_str()
-//             .map(String::from)
-//             .map(|mut s| { s.push_str(file_name_stub.as_ref()); s })
-//             .map(|mut s| { s.push('*'); s })
-//     };
-
-//     match opt_pattern {
-//         Some(pattern) => {
-//             match glob::glob(&pattern) {
-//                 Ok(globber) => {
-//                     let mut matching_paths: Vec<PathBuf> = vec![];
-
-//                     for entry in globber {
-//                         match entry {
-//                             Ok(p) => { matching_paths.push(p) },
-//                             Err(e) => {
-//                                 error!("Error when globbing paths: {}", e);
-//                             },
-//                         }
-//                     }
-
-//                     if matching_paths.len() < 1 {
-//                         error!("No matching paths found with glob");
-//                         None
-//                     } else if matching_paths.len() > 1 {
-//                         error!("More than one matching path ({}) found with glob", matching_paths.len());
-//                         None
-//                     }
-//                     else {
-//                         match matching_paths[0].file_name().and_then(|s| s.to_str()) {
-//                             Some(fn_str) => Some(fn_str.to_string()),
-//                             None => None,
-//                         }
-//                     }
-//                 },
-//                 Err(e) => {
-//                     error!("Error when constructing glob: {}", e);
-//                     None
-//                 },
-//             }
-//         },
-//         None => {
-//             error!("Directory path not convertible to string");
-//             None
-//         }
-//     }
-// }
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum FuzzyMatchError {
     InvalidPattern(String),
