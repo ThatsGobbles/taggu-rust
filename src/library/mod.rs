@@ -34,10 +34,6 @@ impl MediaLibrary {
 
         ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
 
-        // if !root_dir.is_dir() {
-        //     Err(ErrorKind::NotADirectory(root_dir.clone()))?
-        // }
-
         Ok(MediaLibrary {
             root_dir,
             meta_target_pairs,
@@ -57,17 +53,9 @@ impl MediaLibrary {
 
         // Rule: item path must be proper.
         ensure!(self.is_proper_sub_path(&abs_item_path), ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()));
-        // if !self.is_proper_sub_path(&abs_item_path) {
-        //     error!(r#"Item path "{}" is not a proper subpath of "{}""#, abs_item_path.to_string_lossy(), self.root_dir.to_string_lossy());
-        //     Err(ErrorKind::InvalidSubPath(abs_item_path.clone(), self.root_dir.clone()))?
-        // }
 
         // Rule: item path must exist.
         ensure!(abs_item_path.exists(), ErrorKind::DoesNotExist(abs_item_path.clone()));
-        // if !abs_item_path.exists() {
-        //     error!(r#"Item path "{}" does not exist"#, abs_item_path.to_string_lossy());
-        //     Err(ErrorKind::DoesNotExist(abs_item_path.clone()))?
-        // }
 
         let mut results: Vec<PathBuf> = vec![];
 
@@ -80,13 +68,14 @@ impl MediaLibrary {
 
                 let meta_file_path = meta_target_dir_path.join(meta_file_name);
 
-                if !meta_file_path.exists() {
+                if !meta_file_path.is_file() {
                     continue;
                 }
 
                 results.push(meta_file_path);
             } else {
                 // TODO: Figure out what to do here.
+                // No meta taregt dir path was able to be produced from the item path.
             }
         }
 
@@ -98,15 +87,9 @@ impl MediaLibrary {
 
         // Rule: meta file path must be proper.
         ensure!(self.is_proper_sub_path(&abs_meta_path), ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()));
-        // if !self.is_proper_sub_path(&abs_meta_path) {
-        //     Err(ErrorKind::InvalidSubPath(abs_meta_path.clone(), self.root_dir.clone()))?
-        // }
 
         // Rule: meta file path must exist and be a file.
         ensure!(abs_meta_path.is_file(), ErrorKind::NotAFile(abs_meta_path.clone()));
-        // if !abs_meta_path.is_file() {
-        //     Err(ErrorKind::NotAFile(abs_meta_path.clone()))?
-        // }
 
         let mut results: Vec<(PathBuf, MetaBlock)> = vec![];
 
@@ -141,9 +124,11 @@ impl MediaLibrary {
                 }
             } else {
                 // TODO: Figure out what to do here.
+                // The meta path has no file name.
             }
         } else {
             // TODO: Figure out what to do here.
+            // The working dir path has no parent.
         }
 
         Ok(results)

@@ -15,7 +15,7 @@ mod helpers;
 mod yaml;
 mod metadata;
 mod plexer;
-mod query;
+mod lookup;
 mod error;
 
 fn main() {

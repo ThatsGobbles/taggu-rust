@@ -35,5 +35,6 @@ error_chain!{
     foreign_links {
         Io(::std::io::Error);
         Yaml(::yaml_rust::scanner::ScanError);
+        FuzzyMatch(::helpers::FuzzyMatchError);
     }
 }

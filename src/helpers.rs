@@ -100,9 +100,9 @@ pub enum FuzzyMatchError {
 impl Error for FuzzyMatchError {
     fn description(&self) -> &str {
         match *self {
-            FuzzyMatchError::InvalidPattern(_) => "Invalid glob pattern",
-            FuzzyMatchError::ZeroMatches(_) => "Found zero matches for pattern, expected exactly one",
-            FuzzyMatchError::MultipleMatches(_, _) => "Found multiple matches for pattern, expected exactly one",
+            FuzzyMatchError::InvalidPattern(_) => "invalid glob pattern",
+            FuzzyMatchError::ZeroMatches(_) => "found zero matches for pattern",
+            FuzzyMatchError::MultipleMatches(_, _) => "found multiple matches for pattern",
         }
     }
 }
@@ -110,9 +110,9 @@ impl Error for FuzzyMatchError {
 impl Display for FuzzyMatchError {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match *self {
-            FuzzyMatchError::InvalidPattern(ref att_pattern) => write!(f, r#"Invalid glob pattern: "{}""#, att_pattern),
-            FuzzyMatchError::ZeroMatches(ref pattern) => write!(f, r##"Found 0 matches for pattern "{}", expected exactly one"##, pattern),
-            FuzzyMatchError::MultipleMatches(ref pattern, ref count) => write!(f, r##"Found {} matches for pattern "{}", expected exactly one"##, count, pattern),
+            FuzzyMatchError::InvalidPattern(ref att_pattern) => write!(f, "{}: '{}'", self.description(), att_pattern),
+            FuzzyMatchError::ZeroMatches(ref pattern) => write!(f, "{}: '{}'", self.description(), pattern),
+            FuzzyMatchError::MultipleMatches(ref pattern, _) => write!(f, "{}: '{}'", self.description(), pattern),
         }
     }
 }
@@ -138,21 +138,16 @@ where N: AsRef<str>,
             };
 
             if matched_strs.len() < 1 {
-                warn!("No matches found");
                 Err(FuzzyMatchError::ZeroMatches(pattern.to_string()))
             }
             else if matched_strs.len() > 1 {
-                warn!("Multiple matches found");
                 Err(FuzzyMatchError::MultipleMatches(pattern.to_string(), matched_strs.len()))
             }
             else {
                 Ok(matched_strs[0])
             }
         },
-        Err(_) => {
-            warn!("Error when constructing pattern: {}", pattern_str);
-            Err(FuzzyMatchError::InvalidPattern(pattern_str.to_string()))
-        },
+        Err(_) => Err(FuzzyMatchError::InvalidPattern(pattern_str.to_string())),
     }
 }
 
