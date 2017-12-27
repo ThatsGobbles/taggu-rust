@@ -17,6 +17,7 @@ mod metadata;
 mod plexer;
 mod lookup;
 mod error;
+mod generator;
 
 fn main() {
 }

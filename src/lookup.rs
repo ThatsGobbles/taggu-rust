@@ -2,7 +2,9 @@ use std::path::Path;
 use std::collections::HashSet;
 
 use library::MediaLibrary;
-use helpers::{normalize};
+use helpers::normalize;
+use metadata::MetaValue;
+use error::*;
 
 trait LabelExtractor {
     fn extract_label<S: AsRef<str>>(&self, item_file_name: S) -> String;
@@ -64,52 +66,57 @@ pub fn lookup_field<P: AsRef<Path>>(
     media_library: &MediaLibrary,
     abs_item_path: P,
     options: &LookupOptions,
-    )
+    ) -> Result<Option<MetaValue>>
 {
     let abs_item_path = normalize(abs_item_path.as_ref());
 
     // Get meta file paths from item path.
-    let meta_file_paths = media_library.meta_fps_from_item_fp(&abs_item_path).unwrap();
+    let meta_file_paths = media_library.meta_fps_from_item_fp(&abs_item_path)?;
 
-    for meta_file_path in meta_file_paths {
+    'meta: for meta_file_path in meta_file_paths {
         // Open this meta file path and see if it contains the field we are looking for.
-        match media_library.item_fps_from_meta_fp(&meta_file_path) {
-            Ok(records) => {
-                for (found_item_path, found_meta_block) in records {
-                    if abs_item_path == found_item_path {
-                        // We found a meta block for this path, check if the desired field is contained.
-                        match found_meta_block.get(&options.field_name) {
-                            Some(val) => {
-                                println!("Found value: {:?}", val);
-                                break;
-                            },
-                            None => {
-                                println!("Value not found here");
-                                continue;
-                            }
-                        }
+        let records = media_library.item_fps_from_meta_fp(&meta_file_path)?;
+        'item: for (found_item_path, found_meta_block) in records {
+            if abs_item_path == found_item_path {
+                // We found a meta block for this path, check if the desired field is contained.
+                match found_meta_block.get(&options.field_name) {
+                    Some(val) => {
+                        println!("Found value: {:?}", val);
+                        return Ok(Some(val.clone()))
+                    },
+                    None => {
+                        println!("Value not found here");
+                        continue 'item;
                     }
                 }
-            },
-            Err(_) => {},
+            }
         }
 
-        // if let Ok(records) = media_library.item_fps_from_meta_fp(&meta_file_path) {
-        //     for (found_item_path, found_meta_block) in records {
-        //         if abs_item_path == found_item_path {
-        //             // We found a meta block for this path, check if the desired field is contained.
-        //             match found_meta_block.get(&options.field_name) {
-        //                 Some(val) => { println!("Found value: {:?}", val); break; },
-        //                 None => { println!("Value not found here"); continue; }
+        // match media_library.item_fps_from_meta_fp(&meta_file_path) {
+        //     Ok(records) => {
+        //         'item: for (found_item_path, found_meta_block) in records {
+        //             if abs_item_path == found_item_path {
+        //                 // We found a meta block for this path, check if the desired field is contained.
+        //                 match found_meta_block.get(&options.field_name) {
+        //                     Some(val) => {
+        //                         println!("Found value: {:?}", val);
+        //                         break 'meta;
+        //                     },
+        //                     None => {
+        //                         println!("Value not found here");
+        //                         continue 'item;
+        //                     }
+        //                 }
         //             }
         //         }
-        //     }
-        // }
-
-        // for record in records {
-        //     println!("{:?}", record);
+        //     },
+        //     Err(_) => {
+        //         // There was an error in looking up meta fps.
+        //     },
         // }
     }
+
+    Ok(None)
 }
 
 #[cfg(test)]

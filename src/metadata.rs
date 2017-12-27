@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::fs::DirEntry;
+use std::iter::{empty, once};
 
 use helpers::normalize;
 use library::sort_order::SortOrder;
 use library::selection::Selection;
 use error::*;
+use generator::gen_to_iter;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub enum MetaKey {
@@ -19,6 +21,45 @@ pub enum MetaValue {
     String(String),
     Sequence(Vec<MetaValue>),
     Mapping(BTreeMap<MetaKey, MetaValue>),
+}
+
+impl MetaValue {
+    pub fn iter_over<'a>(&'a self) -> impl Iterator<Item = &String> + 'a {
+        let closure = move || {
+            match *self {
+                MetaValue::Null => {},
+                MetaValue::String(ref s) => { yield s; },
+                MetaValue::Sequence(ref mvs) => {
+                    for mv in mvs {
+                        for i in mv.iter_over() {
+                            yield i;
+                        }
+                    }
+                },
+                MetaValue::Mapping(ref map) => {
+                    // TODO: Need to handle null key first.
+                    for (mk, mv) in map {
+                        match *mk {
+                            MetaKey::Null => {},
+                            MetaKey::String(ref s) => { yield s; },
+                        }
+
+                        for i in mv.iter_over() {
+                            yield i;
+                        }
+                    }
+                },
+            }
+        };
+
+        gen_to_iter(closure)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub enum MetaIterValue {
+    Null,
+    String(String),
 }
 
 /// Represents one or more item targets that a given set of metadata provides data for.
