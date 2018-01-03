@@ -339,11 +339,11 @@ mod tests {
         assert_eq!(
             vec![
                 (tp.to_path_buf(), btreemap![
-                    String::from("title") => MetaValue::String(String::from("PsyStyle Nation")),
+                    String::from("title") => MetaValue::Str(String::from("PsyStyle Nation")),
                     String::from("artist") =>
-                        MetaValue::Sequence(vec![
-                            MetaValue::String(String::from("lapix")),
-                            MetaValue::String(String::from("Massive New Krew")),
+                        MetaValue::Seq(vec![
+                            MetaValue::Str(String::from("lapix")),
+                            MetaValue::Str(String::from("Massive New Krew")),
                         ]),
                 ])
             ],
@@ -354,11 +354,11 @@ mod tests {
         assert_eq!(
             vec![
                 (tp.join("item.flac"), btreemap![
-                    String::from("artist") => MetaValue::String(String::from("lapix")),
-                    String::from("title") => MetaValue::String(String::from("Black Mamba")),
+                    String::from("artist") => MetaValue::Str(String::from("lapix")),
+                    String::from("title") => MetaValue::Str(String::from("Black Mamba")),
                 ]),
                 (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::String(String::from("What Is This?")),
+                    String::from("title") => MetaValue::Str(String::from("What Is This?")),
                 ]),
             ],
             found
@@ -368,11 +368,11 @@ mod tests {
         assert_eq!(
             vec![
                 (tp.join("item.flac"), btreemap![
-                    String::from("artist") => MetaValue::String(String::from("lapix")),
-                    String::from("title") => MetaValue::String(String::from("Black Mamba")),
+                    String::from("artist") => MetaValue::Str(String::from("lapix")),
+                    String::from("title") => MetaValue::Str(String::from("Black Mamba")),
                 ]),
                 (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::String(String::from("What Is This?")),
+                    String::from("title") => MetaValue::Str(String::from("What Is This?")),
                 ]),
             ],
             found
@@ -382,8 +382,8 @@ mod tests {
         assert_eq!(
             vec![
                 (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::String(String::from("A Subtrack?")),
-                    String::from("artist") => MetaValue::String(String::from("Massive New Krew")),
+                    String::from("title") => MetaValue::Str(String::from("A Subtrack?")),
+                    String::from("artist") => MetaValue::Str(String::from("Massive New Krew")),
                 ])
             ],
             found

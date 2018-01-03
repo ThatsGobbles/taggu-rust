@@ -52,14 +52,14 @@ fn yaml_as_string(y: &Yaml) -> Option<String> {
 
 fn yaml_as_meta_key(y: &Yaml) -> Option<MetaKey> {
     match *y {
-        Yaml::Null => Some(MetaKey::Null),
-        _ => yaml_as_string(y).map(|s| MetaKey::String(s)),
+        Yaml::Null => Some(MetaKey::Nil),
+        _ => yaml_as_string(y).map(|s| MetaKey::Str(s)),
     }
 }
 
 fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
     match *y {
-        Yaml::Null => Some(MetaValue::Null),
+        Yaml::Null => Some(MetaValue::Nil),
         Yaml::Array(ref arr) => {
             let mut seq: Vec<MetaValue> = vec![];
 
@@ -72,7 +72,7 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
                 }
             }
 
-            Some(MetaValue::Sequence(seq))
+            Some(MetaValue::Seq(seq))
         },
         Yaml::Hash(ref hsh) => {
             let mut map: BTreeMap<MetaKey, MetaValue> = BTreeMap::new();
@@ -89,10 +89,10 @@ fn yaml_as_meta_value(y: &Yaml) -> Option<MetaValue> {
                 }
             }
 
-            Some(MetaValue::Mapping(map))
+            Some(MetaValue::Map(map))
         },
         _ => {
-            yaml_as_string(&y).map(|s| MetaValue::String(s))
+            yaml_as_string(&y).map(|s| MetaValue::Str(s))
         },
     }
 }
@@ -253,33 +253,33 @@ mod tests {
     fn test_yaml_as_meta_key() {
         let inputs_and_expected = vec![
             // Strings
-            ("foo", Some(MetaKey::String("foo".to_string()))),
-            (r#""foo""#, Some(MetaKey::String("foo".to_string()))),
-            (r#"'foo'"#, Some(MetaKey::String("foo".to_string()))),
-            (r#""\"foo\"""#, Some(MetaKey::String(r#""foo""#.to_string()))),
-            (r#""[foo, bar]""#, Some(MetaKey::String("[foo, bar]".to_string()))),
-            (r#""foo: bar""#, Some(MetaKey::String("foo: bar".to_string()))),
-            (r#""foo:    bar""#, Some(MetaKey::String("foo:    bar".to_string()))),
+            ("foo", Some(MetaKey::Str("foo".to_string()))),
+            (r#""foo""#, Some(MetaKey::Str("foo".to_string()))),
+            (r#"'foo'"#, Some(MetaKey::Str("foo".to_string()))),
+            (r#""\"foo\"""#, Some(MetaKey::Str(r#""foo""#.to_string()))),
+            (r#""[foo, bar]""#, Some(MetaKey::Str("[foo, bar]".to_string()))),
+            (r#""foo: bar""#, Some(MetaKey::Str("foo: bar".to_string()))),
+            (r#""foo:    bar""#, Some(MetaKey::Str("foo:    bar".to_string()))),
 
             // Integers
-            ("27", Some(MetaKey::String("27".to_string()))),
-            ("-27", Some(MetaKey::String("-27".to_string()))),
+            ("27", Some(MetaKey::Str("27".to_string()))),
+            ("-27", Some(MetaKey::Str("-27".to_string()))),
             // TODO: This does not work, due to it getting parsed as an int and losing the plus.
-            // ("+27", Some(MetaKey::String("+27".to_string()))),
+            // ("+27", Some(MetaKey::Str("+27".to_string()))),
 
             // Floats
-            ("3.14", Some(MetaKey::String("3.14".to_string()))),
-            ("3.14159265358979323846264338327950288419716939937510582", Some(MetaKey::String("3.14159265358979323846264338327950288419716939937510582".to_string()))),
+            ("3.14", Some(MetaKey::Str("3.14".to_string()))),
+            ("3.14159265358979323846264338327950288419716939937510582", Some(MetaKey::Str("3.14159265358979323846264338327950288419716939937510582".to_string()))),
 
             // Nulls
-            ("~", Some(MetaKey::Null)),
-            ("null", Some(MetaKey::Null)),
+            ("~", Some(MetaKey::Nil)),
+            ("null", Some(MetaKey::Nil)),
 
             // Booleans
-            ("True", Some(MetaKey::String("True".to_string()))),
-            ("true", Some(MetaKey::String("true".to_string()))),
-            ("False", Some(MetaKey::String("False".to_string()))),
-            ("false", Some(MetaKey::String("false".to_string()))),
+            ("True", Some(MetaKey::Str("True".to_string()))),
+            ("true", Some(MetaKey::Str("true".to_string()))),
+            ("False", Some(MetaKey::Str("False".to_string()))),
+            ("false", Some(MetaKey::Str("false".to_string()))),
 
             // Sequences
             ("- item_a\n- item_b", None),
@@ -307,72 +307,72 @@ mod tests {
     fn test_yaml_as_meta_value() {
         let inputs_and_expected = vec![
             // Strings
-            ("foo", Some(MetaValue::String("foo".to_string()))),
-            (r#""foo""#, Some(MetaValue::String("foo".to_string()))),
-            (r#"'foo'"#, Some(MetaValue::String("foo".to_string()))),
-            (r#""\"foo\"""#, Some(MetaValue::String(r#""foo""#.to_string()))),
-            (r#""[foo, bar]""#, Some(MetaValue::String("[foo, bar]".to_string()))),
-            (r#""foo: bar""#, Some(MetaValue::String("foo: bar".to_string()))),
-            (r#""foo:    bar""#, Some(MetaValue::String("foo:    bar".to_string()))),
+            ("foo", Some(MetaValue::Str("foo".to_string()))),
+            (r#""foo""#, Some(MetaValue::Str("foo".to_string()))),
+            (r#"'foo'"#, Some(MetaValue::Str("foo".to_string()))),
+            (r#""\"foo\"""#, Some(MetaValue::Str(r#""foo""#.to_string()))),
+            (r#""[foo, bar]""#, Some(MetaValue::Str("[foo, bar]".to_string()))),
+            (r#""foo: bar""#, Some(MetaValue::Str("foo: bar".to_string()))),
+            (r#""foo:    bar""#, Some(MetaValue::Str("foo:    bar".to_string()))),
 
             // Integers
-            ("27", Some(MetaValue::String("27".to_string()))),
-            ("-27", Some(MetaValue::String("-27".to_string()))),
+            ("27", Some(MetaValue::Str("27".to_string()))),
+            ("-27", Some(MetaValue::Str("-27".to_string()))),
             // TODO: This does not work, due to it getting parsed as an int and losing the plus.
-            // ("+27", Some(MetaValue::String("+27".to_string()))),
+            // ("+27", Some(MetaValue::Str("+27".to_string()))),
 
             // Floats
-            ("3.14", Some(MetaValue::String("3.14".to_string()))),
-            ("3.14159265358979323846264338327950288419716939937510582", Some(MetaValue::String("3.14159265358979323846264338327950288419716939937510582".to_string()))),
+            ("3.14", Some(MetaValue::Str("3.14".to_string()))),
+            ("3.14159265358979323846264338327950288419716939937510582", Some(MetaValue::Str("3.14159265358979323846264338327950288419716939937510582".to_string()))),
 
             // Nulls
-            ("~", Some(MetaValue::Null)),
-            ("null", Some(MetaValue::Null)),
+            ("~", Some(MetaValue::Nil)),
+            ("null", Some(MetaValue::Nil)),
 
             // Booleans
-            ("True", Some(MetaValue::String("True".to_string()))),
-            ("true", Some(MetaValue::String("true".to_string()))),
-            ("False", Some(MetaValue::String("False".to_string()))),
-            ("false", Some(MetaValue::String("false".to_string()))),
+            ("True", Some(MetaValue::Str("True".to_string()))),
+            ("true", Some(MetaValue::Str("true".to_string()))),
+            ("False", Some(MetaValue::Str("False".to_string()))),
+            ("false", Some(MetaValue::Str("false".to_string()))),
 
             // Sequences
-            ("- item_a\n- item_b", Some(MetaValue::Sequence(vec![
-                MetaValue::String("item_a".to_string()),
-                MetaValue::String("item_b".to_string()),
+            ("- item_a\n- item_b", Some(MetaValue::Seq(vec![
+                MetaValue::Str("item_a".to_string()),
+                MetaValue::Str("item_b".to_string()),
             ]))),
-            ("- item_a", Some(MetaValue::Sequence(vec![
-                MetaValue::String("item_a".to_string()),
+            ("- item_a", Some(MetaValue::Seq(vec![
+                MetaValue::Str("item_a".to_string()),
             ]))),
-            ("[item_a, item_b]", Some(MetaValue::Sequence(vec![
-                MetaValue::String("item_a".to_string()),
-                MetaValue::String("item_b".to_string()),
+            ("[item_a, item_b]", Some(MetaValue::Seq(vec![
+                MetaValue::Str("item_a".to_string()),
+                MetaValue::Str("item_b".to_string()),
             ]))),
-            ("[item_a]", Some(MetaValue::Sequence(vec![
-                MetaValue::String("item_a".to_string()),
+            ("[item_a]", Some(MetaValue::Seq(vec![
+                MetaValue::Str("item_a".to_string()),
             ]))),
-            ("- 27\n- 42", Some(MetaValue::Sequence(vec![
-                MetaValue::String("27".to_string()),
-                MetaValue::String("42".to_string()),
+            ("- 27\n- 42", Some(MetaValue::Seq(vec![
+                MetaValue::Str("27".to_string()),
+                MetaValue::Str("42".to_string()),
             ]))),
-            ("- 27\n- null", Some(MetaValue::Sequence(vec![
-                MetaValue::String("27".to_string()),
-                MetaValue::Null,
+            ("- 27\n- null", Some(MetaValue::Seq(vec![
+                MetaValue::Str("27".to_string()),
+                MetaValue::Nil,
             ]))),
 
             // Mappings
-            ("key_a: val_a\nkey_b: val_b", Some(MetaValue::Mapping(btreemap![
-                MetaKey::String("key_a".to_string()) => MetaValue::String("val_a".to_string()),
-                MetaKey::String("key_b".to_string()) => MetaValue::String("val_b".to_string()),
+            ("key_a: val_a\nkey_b: val_b", Some(MetaValue::Map(btreemap![
+                MetaKey::Str("key_a".to_string()) => MetaValue::Str("val_a".to_string()),
+                MetaKey::Str("key_b".to_string()) => MetaValue::Str("val_b".to_string()),
             ]))),
-            ("key_a: val_a", Some(MetaValue::Mapping(btreemap![
-                MetaKey::String("key_a".to_string()) => MetaValue::String("val_a".to_string()),
+            ("key_a: val_a", Some(MetaValue::Map(btreemap![
+                MetaKey::Str("key_a".to_string()) => MetaValue::Str("val_a".to_string()),
             ]))),
-            ("{key_a: val_a, key_b: val_b}", Some(MetaValue::Mapping(btreemap![
-                MetaKey::String("key_a".to_string()) => MetaValue::String("val_a".to_string()),
-                MetaKey::String("key_b".to_string()) => MetaValue::String("val_b".to_string()),
+            ("{key_a: val_a, key_b: val_b}", Some(MetaValue::Map(btreemap![
+                MetaKey::Str("key_a".to_string()) => MetaValue::Str("val_a".to_string()),
+                MetaKey::Str("key_b".to_string()) => MetaValue::Str("val_b".to_string()),
             ]))),
-            ("{key_a: val_a}", Some(MetaValue::Mapping(btreemap![
-                MetaKey::String("key_a".to_string()) => MetaValue::String("val_a".to_string()),
+            ("{key_a: val_a}", Some(MetaValue::Map(btreemap![
+                MetaKey::Str("key_a".to_string()) => MetaValue::Str("val_a".to_string()),
             ]))),
 
             // Aliases
@@ -404,57 +404,57 @@ mod tests {
             // Valid blocks
             ("key_a: val_a\nkey_b: val_b", {
                 let mut mb = MetaBlock::new();
-                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
-                mb.insert("key_b".to_string(), MetaValue::String("val_b".to_string()));
+                mb.insert("key_a".to_string(), MetaValue::Str("val_a".to_string()));
+                mb.insert("key_b".to_string(), MetaValue::Str("val_b".to_string()));
                 Some(mb)
             }),
             ("{key_a: val_a, key_b: val_b}", {
                 let mut mb = MetaBlock::new();
-                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
-                mb.insert("key_b".to_string(), MetaValue::String("val_b".to_string()));
+                mb.insert("key_a".to_string(), MetaValue::Str("val_a".to_string()));
+                mb.insert("key_b".to_string(), MetaValue::Str("val_b".to_string()));
                 Some(mb)
             }),
             ("{key_a: [val_a_a, val_a_b, val_a_c], key_b: ~}", {
                 let mut mb = MetaBlock::new();
                 mb.insert(
                     "key_a".to_string(),
-                    MetaValue::Sequence(vec![
-                        MetaValue::String("val_a_a".to_string()),
-                        MetaValue::String("val_a_b".to_string()),
-                        MetaValue::String("val_a_c".to_string()),
+                    MetaValue::Seq(vec![
+                        MetaValue::Str("val_a_a".to_string()),
+                        MetaValue::Str("val_a_b".to_string()),
+                        MetaValue::Str("val_a_c".to_string()),
                     ])
                 );
-                mb.insert("key_b".to_string(), MetaValue::Null);
+                mb.insert("key_b".to_string(), MetaValue::Nil);
                 Some(mb)
             }),
             ("{key_a: {sub_key_a: sub_val_a, sub_key_b: sub_val_b, ~: sub_val_c}, key_b: []}", {
                 let mut mb = MetaBlock::new();
                 mb.insert(
                     "key_a".to_string(),
-                    MetaValue::Mapping(btreemap![
-                        MetaKey::String("sub_key_a".to_string()) => MetaValue::String("sub_val_a".to_string()),
-                        MetaKey::String("sub_key_b".to_string()) => MetaValue::String("sub_val_b".to_string()),
-                        MetaKey::Null => MetaValue::String("sub_val_c".to_string()),
+                    MetaValue::Map(btreemap![
+                        MetaKey::Str("sub_key_a".to_string()) => MetaValue::Str("sub_val_a".to_string()),
+                        MetaKey::Str("sub_key_b".to_string()) => MetaValue::Str("sub_val_b".to_string()),
+                        MetaKey::Nil => MetaValue::Str("sub_val_c".to_string()),
                     ])
                 );
-                mb.insert("key_b".to_string(), MetaValue::Sequence(vec![]));
+                mb.insert("key_b".to_string(), MetaValue::Seq(vec![]));
                 Some(mb)
             }),
 
             // Skipped entries
             ("{key_a: val_a, [skipped_key, skipped_key]: skipped_val}", {
                 let mut mb = MetaBlock::new();
-                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                mb.insert("key_a".to_string(), MetaValue::Str("val_a".to_string()));
                 Some(mb)
             }),
             ("{key_a: val_a, {skipped_key_key: skipped_key_val}: skipped_val}", {
                 let mut mb = MetaBlock::new();
-                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                mb.insert("key_a".to_string(), MetaValue::Str("val_a".to_string()));
                 Some(mb)
             }),
             ("{key_a: val_a, ~: skipped_val}", {
                 let mut mb = MetaBlock::new();
-                mb.insert("key_a".to_string(), MetaValue::String("val_a".to_string()));
+                mb.insert("key_a".to_string(), MetaValue::Str("val_a".to_string()));
                 Some(mb)
             }),
         ];

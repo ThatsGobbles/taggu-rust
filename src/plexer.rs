@@ -164,8 +164,8 @@ mod tests {
     #[test]
     fn test_plex_singular() {
         let mb: MetaBlock = btreemap![
-            String::from("artist") => MetaValue::String(String::from("lapix")),
-            String::from("title") => MetaValue::String(String::from("Core Signal")),
+            String::from("artist") => MetaValue::Str(String::from("lapix")),
+            String::from("title") => MetaValue::Str(String::from("Core Signal")),
         ];
 
         let expected = vec![
@@ -180,19 +180,19 @@ mod tests {
     fn test_plex_multiple_seq() {
         let mb_seq: MetaBlockSeq = vec![
             btreemap![
-                String::from("artist") => MetaValue::Sequence(vec![
-                    MetaValue::String(String::from("MK")),
-                    MetaValue::String(String::from("Kanae Asaba")),
+                String::from("artist") => MetaValue::Seq(vec![
+                    MetaValue::Str(String::from("MK")),
+                    MetaValue::Str(String::from("Kanae Asaba")),
                 ]),
-                String::from("title") => MetaValue::String(String::from("I'm Falling Love With You")),
+                String::from("title") => MetaValue::Str(String::from("I'm Falling Love With You")),
             ],
             btreemap![
-                String::from("artist") => MetaValue::String(String::from("Taishi")),
-                String::from("title") => MetaValue::String(String::from("Floating Disk")),
+                String::from("artist") => MetaValue::Str(String::from("Taishi")),
+                String::from("title") => MetaValue::Str(String::from("Floating Disk")),
             ],
             btreemap![
-                String::from("artist") => MetaValue::String(String::from("Nhato")),
-                String::from("title") => MetaValue::String(String::from("Jupiter Junction")),
+                String::from("artist") => MetaValue::Str(String::from("Nhato")),
+                String::from("title") => MetaValue::Str(String::from("Jupiter Junction")),
             ],
         ];
 
@@ -212,19 +212,19 @@ mod tests {
     fn test_plex_multiple_map() {
         let mb_map: MetaBlockMap = btreemap![
             String::from("TRACK01.flac") => btreemap![
-                String::from("artist") => MetaValue::Sequence(vec![
-                    MetaValue::String(String::from("MK")),
-                    MetaValue::String(String::from("Kanae Asaba")),
+                String::from("artist") => MetaValue::Seq(vec![
+                    MetaValue::Str(String::from("MK")),
+                    MetaValue::Str(String::from("Kanae Asaba")),
                 ]),
-                String::from("title") => MetaValue::String(String::from("I'm Falling Love With You")),
+                String::from("title") => MetaValue::Str(String::from("I'm Falling Love With You")),
             ],
             String::from("TRACK02.flac") => btreemap![
-                String::from("artist") => MetaValue::String(String::from("Taishi")),
-                String::from("title") => MetaValue::String(String::from("Floating Disk")),
+                String::from("artist") => MetaValue::Str(String::from("Taishi")),
+                String::from("title") => MetaValue::Str(String::from("Floating Disk")),
             ],
             String::from("TRACK03.flac") => btreemap![
-                String::from("artist") => MetaValue::String(String::from("Nhato")),
-                String::from("title") => MetaValue::String(String::from("Jupiter Junction")),
+                String::from("artist") => MetaValue::Str(String::from("Nhato")),
+                String::from("title") => MetaValue::Str(String::from("Jupiter Junction")),
             ],
         ];
 

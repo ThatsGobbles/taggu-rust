@@ -10,56 +10,88 @@ use error::*;
 use generator::gen_to_iter;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
+pub enum MetaAtom {
+    Nil,
+    Str(String),
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub enum MetaKey {
-    Null,
-    String(String),
+    Nil,
+    Str(String),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum MetaValue {
-    Null,
-    String(String),
-    Sequence(Vec<MetaValue>),
-    Mapping(BTreeMap<MetaKey, MetaValue>),
+    Nil,
+    Str(String),
+    Seq(Vec<MetaValue>),
+    Map(BTreeMap<MetaKey, MetaValue>),
 }
 
 impl MetaValue {
-    pub fn iter_over<'a>(&'a self) -> impl Iterator<Item = &String> + 'a {
-        let closure = move || {
-            match *self {
-                MetaValue::Null => {},
-                MetaValue::String(ref s) => { yield s; },
-                MetaValue::Sequence(ref mvs) => {
-                    for mv in mvs {
-                        for i in mv.iter_over() {
-                            yield i;
-                        }
-                    }
-                },
-                MetaValue::Mapping(ref map) => {
-                    // TODO: Need to handle null key first.
-                    for (mk, mv) in map {
-                        match *mk {
-                            MetaKey::Null => {},
-                            MetaKey::String(ref s) => { yield s; },
-                        }
+    pub fn collect_data<'a>(&'a self) -> Vec<&'a String> {
+        match *self {
+            MetaValue::Nil => vec![],
+            MetaValue::Str(ref s) => vec![s],
+            MetaValue::Seq(ref mvs) => mvs.iter().flat_map(|x| x.collect_data()).collect(),
+            MetaValue::Map(ref map) => {
+                let mut vals = vec![];
 
-                        for i in mv.iter_over() {
-                            yield i;
-                        }
+                for (mk, mv) in map {
+                    match *mk {
+                        MetaKey::Nil => {},
+                        MetaKey::Str(ref s) => { vals.push(s); },
                     }
-                },
-            }
-        };
 
-        gen_to_iter(closure)
+                    for i in mv.collect_data() {
+                        vals.push(i);
+                    }
+                }
+
+                vals
+            },
+        }
     }
+
+    // LEARN: Generators use stackless coroutines, so they can't be recursive. :(
+    // pub fn iter_over<'a>(&'a self) -> impl Iterator<Item = &String> + 'a {
+    //     let closure = move || {
+    //         match *self {
+    //             MetaValue::Nil => {},
+    //             MetaValue::Str(ref s) => { yield s; },
+    //             MetaValue::Seq(ref mvs) => {
+    //                 for mv in mvs {
+    //                     for i in mv.iter_over() {
+    //                         yield i;
+    //                     }
+    //                 }
+    //             },
+    //             MetaValue::Map(ref map) => {
+    //                 // TODO: Need to handle null key first.
+    //                 for (mk, mv) in map {
+    //                     match *mk {
+    //                         MetaKey::Nil => {},
+    //                         MetaKey::Str(ref s) => { yield s; },
+    //                     }
+
+    //                     for i in mv.iter_over() {
+    //                         yield i;
+    //                     }
+    //                 }
+    //             },
+    //             _ => {},
+    //         }
+    //     };
+
+    //     gen_to_iter(closure)
+    // }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum MetaIterValue {
-    Null,
-    String(String),
+    Nil,
+    Str(String),
 }
 
 /// Represents one or more item targets that a given set of metadata provides data for.
@@ -136,6 +168,31 @@ impl Metadata {
             Metadata::Contains(_) => Ok(vec![]),
             Metadata::SiblingsSeq(_) => Metadata::get_relevant_names(working_dir_path, selection, Some(sort_order)),
             Metadata::SiblingsMap(_) => Metadata::get_relevant_names(working_dir_path, selection, None),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        MetaValue,
+    };
+
+    #[test]
+    fn test_meta_value_collect_data() {
+        let str_sample_a = "Goldfish".to_string();
+        let str_sample_b = "DIMMI".to_string();
+        let seq_sample = vec![MetaValue::Str(str_sample_a.clone()), MetaValue::Str(str_sample_b.clone())];
+
+        let inputs_and_expected: Vec<(MetaValue, Vec<&String>)> = vec![
+            (MetaValue::Nil, vec![]),
+            (MetaValue::Str(str_sample_a.clone()), vec![&str_sample_a]),
+            (MetaValue::Seq(seq_sample.clone()), vec![&str_sample_a, &str_sample_b]),
+        ];
+
+        for (input, expected) in inputs_and_expected {
+            let produced: Vec<&String> = input.collect_data();
+            assert_eq!(expected, produced);
         }
     }
 }
