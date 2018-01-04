@@ -1,24 +1,25 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::fs::DirEntry;
-use std::iter::{empty, once};
 
 use helpers::normalize;
 use library::sort_order::SortOrder;
 use library::selection::Selection;
 use error::*;
-use generator::gen_to_iter;
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
-pub enum MetaAtom {
-    Nil,
-    Str(String),
-}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub enum MetaKey {
     Nil,
     Str(String),
+}
+
+impl MetaKey {
+    pub fn flatten<'a>(&'a self) -> Vec<&'a String> {
+        match *self {
+            MetaKey::Nil => vec![],
+            MetaKey::Str(ref s) => vec![s],
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -30,26 +31,28 @@ pub enum MetaValue {
 }
 
 impl MetaValue {
-    pub fn collect_data<'a>(&'a self) -> Vec<&'a String> {
+    pub fn flatten<'a>(&'a self, mis: MappingIterScheme) -> Vec<&'a String> {
         match *self {
             MetaValue::Nil => vec![],
             MetaValue::Str(ref s) => vec![s],
-            MetaValue::Seq(ref mvs) => mvs.iter().flat_map(|x| x.collect_data()).collect(),
+            MetaValue::Seq(ref mvs) => mvs.iter().flat_map(|mv| mv.flatten(mis)).collect(),
             MetaValue::Map(ref map) => {
-                let mut vals = vec![];
+                map.iter().flat_map(|(k, v)| {
+                    // This yields nothing for null keys.
+                    // Takes advantage of the fact that due to our definition of the enum, null values are first in the btree map.
+                    let mut res = vec![];
+                    match mis {
+                        MappingIterScheme::Keys | MappingIterScheme::Both => { res.extend(k.flatten()); },
+                        MappingIterScheme::Vals => {},
+                    };
 
-                for (mk, mv) in map {
-                    match *mk {
-                        MetaKey::Nil => {},
-                        MetaKey::Str(ref s) => { vals.push(s); },
-                    }
+                    match mis {
+                        MappingIterScheme::Vals | MappingIterScheme::Both => { res.extend(v.flatten(mis)); },
+                        MappingIterScheme::Keys => {},
+                    };
 
-                    for i in mv.collect_data() {
-                        vals.push(i);
-                    }
-                }
-
-                vals
+                    res
+                }).collect()
             },
         }
     }
@@ -67,31 +70,17 @@ impl MetaValue {
     //                     }
     //                 }
     //             },
-    //             MetaValue::Map(ref map) => {
-    //                 // TODO: Need to handle null key first.
-    //                 for (mk, mv) in map {
-    //                     match *mk {
-    //                         MetaKey::Nil => {},
-    //                         MetaKey::Str(ref s) => { yield s; },
-    //                     }
-
-    //                     for i in mv.iter_over() {
-    //                         yield i;
-    //                     }
-    //                 }
-    //             },
     //             _ => {},
-    //         }
-    //     };
 
     //     gen_to_iter(closure)
     // }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
-pub enum MetaIterValue {
-    Nil,
-    Str(String),
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
+pub enum MappingIterScheme {
+    Keys,
+    Vals,
+    Both,
 }
 
 /// Represents one or more item targets that a given set of metadata provides data for.
@@ -176,13 +165,16 @@ impl Metadata {
 mod tests {
     use super::{
         MetaValue,
+        MappingIterScheme,
     };
 
     #[test]
-    fn test_meta_value_collect_data() {
+    fn test_meta_value_flatten() {
         let str_sample_a = "Goldfish".to_string();
         let str_sample_b = "DIMMI".to_string();
         let seq_sample = vec![MetaValue::Str(str_sample_a.clone()), MetaValue::Str(str_sample_b.clone())];
+
+        let mis = MappingIterScheme::Both;
 
         let inputs_and_expected: Vec<(MetaValue, Vec<&String>)> = vec![
             (MetaValue::Nil, vec![]),
@@ -191,7 +183,7 @@ mod tests {
         ];
 
         for (input, expected) in inputs_and_expected {
-            let produced: Vec<&String> = input.collect_data();
+            let produced: Vec<&String> = input.flatten(mis);
             assert_eq!(expected, produced);
         }
     }

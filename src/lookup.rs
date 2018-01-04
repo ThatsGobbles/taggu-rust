@@ -76,9 +76,11 @@ pub fn lookup_field<P: AsRef<Path>>(
     'meta: for meta_file_path in meta_file_paths {
         // Open this meta file path and see if it contains the field we are looking for.
         let records = media_library.item_fps_from_meta_fp(&meta_file_path)?;
+
+        // Search found item paths for a match to target item path.
         'item: for (found_item_path, found_meta_block) in records {
             if abs_item_path == found_item_path {
-                // We found a meta block for this path, check if the desired field is contained.
+                // Found a match for this path, check if the desired field is contained in meta block.
                 match found_meta_block.get(&options.field_name) {
                     Some(val) => {
                         println!("Found value: {:?}", val);
@@ -116,6 +118,7 @@ pub fn lookup_field<P: AsRef<Path>>(
         // }
     }
 
+    // No error, but value was not found.
     Ok(None)
 }
 
@@ -141,6 +144,7 @@ mod tests {
         // println!("\n\n");
         lookup_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/1.01. Nhato - Gotta Get Down.flac"), &LookupOptions::new("artist"));
         lookup_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/"), &LookupOptions::new("what field"));
+        lookup_field(&media_lib, Path::new("/home/lemoine/Music/DJ Snake - Encore/1.09. DJ Snake feat. Travi$ Scott, Migos, & G4shi - Oh Me Oh My.flac"), &LookupOptions::new("feat.artist"));
         // println!("---------------------");
         // lookup_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS"), "COOL");
         // println!("\n\n");

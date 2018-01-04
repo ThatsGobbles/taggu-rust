@@ -100,9 +100,9 @@ pub enum FuzzyMatchError {
 impl Error for FuzzyMatchError {
     fn description(&self) -> &str {
         match *self {
-            FuzzyMatchError::InvalidPattern(_) => "invalid glob pattern",
-            FuzzyMatchError::ZeroMatches(_) => "found zero matches for pattern",
-            FuzzyMatchError::MultipleMatches(_, _) => "found multiple matches for pattern",
+            FuzzyMatchError::InvalidPattern(_) => "Invalid glob pattern",
+            FuzzyMatchError::ZeroMatches(_) => "Found zero matches for pattern",
+            FuzzyMatchError::MultipleMatches(_, _) => "Found multiple matches for pattern",
         }
     }
 }
