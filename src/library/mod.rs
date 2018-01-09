@@ -13,74 +13,83 @@ use error::*;
 use self::selection::Selection;
 use self::sort_order::SortOrder;
 
-pub struct LibraryOptions {
+pub struct LibraryBuilder {
+    root_dir: PathBuf,
+    meta_target_specs: Vec<(String, MetaTarget)>,
     selection: Selection,
     sort_order: SortOrder,
 }
 
-impl LibraryOptions {
-    pub fn new() -> Self {
-        LibraryOptions {
+impl LibraryBuilder {
+    pub fn new<P, I>(root_dir: P, meta_target_specs: I) -> Self
+    where P: Into<PathBuf>,
+          I: IntoIterator<Item = (String, MetaTarget)>,
+    {
+        LibraryBuilder {
+            root_dir: root_dir.into(),
+            meta_target_specs: meta_target_specs.into_iter().collect(),
             selection: Selection::True,
             sort_order: SortOrder::Name,
         }
     }
 
-    pub fn set_selection(&mut self, selection: Selection) -> &mut Self {
+    pub fn selection(&mut self, selection: Selection) -> &mut Self {
         self.selection = selection;
         self
     }
 
-    pub fn set_sort_order(&mut self, sort_order: SortOrder) -> &mut Self {
+    pub fn sort_order(&mut self, sort_order: SortOrder) -> &mut Self {
         self.sort_order = sort_order;
         self
     }
+
+    pub fn create(&self) -> Result<MediaLibrary> {
+        let root_dir = self.root_dir.canonicalize()?;
+
+        ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
+
+        // TODO: Make this more efficient!
+        Ok(MediaLibrary {
+            root_dir,
+            meta_target_specs: self.meta_target_specs.clone(),
+            selection: self.selection.clone(),
+            sort_order: self.sort_order,
+        })
+    }
 }
-
-// pub trait Library {
-//     fn new<P>(root_dir: P) -> Result<Self>
-//     where Self: Sized,
-//           P: AsRef<Path>,
-//     {
-//         Self::new_with(root_dir, LibraryOptions::new())
-//     }
-
-//     fn new_with<P>(root_dir: P, library_options: LibraryOptions) -> Result<Self>
-//     where Self: Sized,
-//           P: AsRef<Path>;
-// }
 
 pub struct MediaLibrary {
     root_dir: PathBuf,
     meta_target_specs: Vec<(String, MetaTarget)>,
-    library_options: LibraryOptions,
+    selection: Selection,
+    sort_order: SortOrder,
 }
 
 impl MediaLibrary {
-    /// Creates a new `MediaLibrary`.
-    /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
-    pub fn new<P, I>(root_dir: P, meta_target_specs: I) -> Result<Self>
-    where P: AsRef<Path>,
-          I: IntoIterator<Item = (String, MetaTarget)>,
-    {
-        Self::new_with_options(root_dir, meta_target_specs, LibraryOptions::new())
-    }
+    // /// Creates a new `MediaLibrary`.
+    // /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
+    // pub fn new<P, I>(root_dir: P, meta_target_specs: I) -> Result<Self>
+    // where P: AsRef<Path>,
+    //       I: IntoIterator<Item = (String, MetaTarget)>,
+    // {
+    //     Self::new_with_options(root_dir, meta_target_specs, LibraryOptions::new())
+    // }
 
-    pub fn new_with_options<P, I>(root_dir: P, meta_target_specs: I, library_options: LibraryOptions) -> Result<Self>
-    where P: AsRef<Path>,
-          I: IntoIterator<Item = (String, MetaTarget)>,
-    {
-        let root_dir = root_dir.as_ref().canonicalize()?;
-        // let root_dir = root_dir.canonicalize()?;
+    // pub fn new_with_options<P, I>(root_dir: P, meta_target_specs: I, library_options: LibraryOptions) -> Result<Self>
+    // where P: AsRef<Path>,
+    //       I: IntoIterator<Item = (String, MetaTarget)>,
+    // {
+    //     let root_dir = root_dir.as_ref().canonicalize()?;
+    //     // let root_dir = root_dir.canonicalize()?;
 
-        ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
+    //     ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
 
-        Ok(MediaLibrary {
-            root_dir,
-            meta_target_specs: meta_target_specs.into_iter().collect(),
-            library_options,
-        })
-    }
+    //     Ok(MediaLibrary {
+    //         root_dir,
+    //         meta_target_specs: meta_target_specs.into_iter().collect(),
+    //         library_options,
+    //     })
+    // }
 
     pub fn is_proper_sub_path<P: AsRef<Path>>(&self, abs_sub_path: P) -> bool {
         let abs_sub_path = normalize(abs_sub_path.as_ref());
@@ -145,7 +154,7 @@ impl MediaLibrary {
 
                         match yaml_as_metadata(&yaml_data, meta_target) {
                             Some(md) => {
-                                let plex_results = multiplex(&md, &working_dir_path, &self.library_options.selection, self.library_options.sort_order, true)?;
+                                let plex_results = multiplex(&md, &working_dir_path, &self.selection, self.sort_order, true)?;
 
                                 for (plex_target, mb) in plex_results {
                                     let item_path = plex_target.resolve(working_dir_path);
@@ -191,7 +200,7 @@ mod tests {
     use tempdir::TempDir;
 
     use metadata::{MetaTarget, MetaValue, MetaBlock};
-    use library::{MediaLibrary, SortOrder, LibraryOptions};
+    use library::{MediaLibrary, SortOrder, LibraryBuilder};
     use library::selection::Selection;
 
     // METHODS
@@ -202,7 +211,7 @@ mod tests {
         let temp = TempDir::new("test_is_proper_sub_path").unwrap();
         let tp = temp.path();
 
-        let ml = MediaLibrary::new(tp, vec![]).unwrap();
+        let ml = LibraryBuilder::new(tp, vec![]).create().expect("Unable to create media library");
 
         let inputs_and_expected = vec![
             (tp.join("sub"), true),
@@ -244,9 +253,6 @@ mod tests {
             ),
         );
 
-        let mut library_options = LibraryOptions::new();
-        library_options.set_selection(selection);
-
         // Create sample item files and directories.
         db.create(tp.join("subdir")).unwrap();
         sleep(Duration::from_millis(5));
@@ -275,7 +281,7 @@ mod tests {
             .expect("Unable to write metadata file");
 
         // Create media library.
-        let media_lib = MediaLibrary::new_with_options(&tp, meta_targets, library_options).expect("Unable to create media library");
+        let media_lib = LibraryBuilder::new(&tp, meta_targets).selection(selection).create().expect("Unable to create media library"); //MediaLibrary::new_with_options(&tp, meta_targets, library_options).expect("Unable to create media library");
 
         // Run tests.
         let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp).expect("Unable to get meta fps");
@@ -319,14 +325,6 @@ mod tests {
             ),
         );
 
-        let mut library_options_map = LibraryOptions::new();
-        library_options_map.set_selection(selection.clone());
-        library_options_map.set_sort_order(SortOrder::Name);
-
-        let mut library_options_seq = LibraryOptions::new();
-        library_options_seq.set_selection(selection.clone());
-        library_options_map.set_sort_order(SortOrder::ModTime);
-
         // Create sample item files and directories.
         db.create(tp.join("subdir")).unwrap();
         sleep(Duration::from_millis(5));
@@ -361,8 +359,16 @@ mod tests {
             .expect("Unable to write metadata file");
 
         // Create media libraries.
-        let media_lib_map = MediaLibrary::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
-        let media_lib_seq = MediaLibrary::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
+        let media_lib_map = LibraryBuilder::new(&tp, meta_targets_map)
+                                .selection(selection.clone())
+                                .sort_order(SortOrder::Name)
+                                .create()
+                                .expect("Unable to create media library"); // MediaLibrary::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
+        let media_lib_seq = LibraryBuilder::new(&tp, meta_targets_seq)
+                                .selection(selection.clone())
+                                .sort_order(SortOrder::ModTime)
+                                .create()
+                                .expect("Unable to create media library"); // MediaLibrary::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
 
         // Run tests.
         let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).expect("Unable to get item fps");
@@ -422,28 +428,28 @@ mod tests {
         assert!(media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).is_err());
     }
 
-    // ASSOCIATED FUNCTIONS
+    // // ASSOCIATED FUNCTIONS
 
-    #[test]
-    fn test_new() {
-        // Create temp directory.
-        let temp = TempDir::new("test_new").unwrap();
-        let tp = temp.path();
+    // #[test]
+    // fn test_new() {
+    //     // Create temp directory.
+    //     let temp = TempDir::new("test_new").unwrap();
+    //     let tp = temp.path();
 
-        let db = DirBuilder::new();
-        let dir_path = tp.join("test");
+    //     let db = DirBuilder::new();
+    //     let dir_path = tp.join("test");
 
-        db.create(&dir_path).unwrap();
+    //     db.create(&dir_path).unwrap();
 
-        let ml = MediaLibrary::new(dir_path, vec![]);
+    //     let ml = MediaLibrary::new(dir_path, vec![]);
 
-        assert!(ml.is_ok());
+    //     assert!(ml.is_ok());
 
-        let dir_path = tp.join("DOES_NOT_EXIST");
+    //     let dir_path = tp.join("DOES_NOT_EXIST");
 
-        let ml = MediaLibrary::new(dir_path, vec![]);
+    //     let ml = MediaLibrary::new(dir_path, vec![]);
 
-        assert!(ml.is_err());
-    }
+    //     assert!(ml.is_err());
+    // }
 }
 

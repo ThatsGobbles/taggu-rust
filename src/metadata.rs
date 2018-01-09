@@ -84,8 +84,9 @@ pub enum MappingIterScheme {
 }
 
 /// Represents one or more item targets that a given set of metadata provides data for.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MetaTarget {
+    // NOTE: Order of enum values matter, this will be the order of resolution for metadata sources.
     Contains,
     Siblings,
 }
@@ -107,6 +108,8 @@ impl MetaTarget {
         }
     }
 }
+
+pub type MetaTargetSpecMap = BTreeMap<MetaTarget, String>;
 
 pub type MetaBlock = BTreeMap<String, MetaValue>;
 pub type MetaBlockSeq = Vec<MetaBlock>;
