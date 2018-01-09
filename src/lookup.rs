@@ -112,7 +112,7 @@ mod tests {
     use tempdir::TempDir;
 
     use super::{lookup_field, LookupOptions};
-    use library::MediaLibrary;
+    use library::{MediaLibrary, LibraryOptions};
     use library::selection::Selection;
     use library::sort_order::SortOrder;
     use metadata::MetaTarget;
@@ -258,12 +258,15 @@ mod tests {
         let temp_media_root = create_temp_media_test_dir("test_lookup_field");
         sleep(Duration::from_millis(1));
 
-        let media_lib = MediaLibrary::new(
-            temp_media_root.path(),
-            vec![(String::from("taggu_self.yml"), MetaTarget::Contains), (String::from("taggu_item.yml"), MetaTarget::Siblings)],
-            Selection::Ext(String::from("flac")),
-            SortOrder::Name,
-        ).expect("Unable to create media library");
+        let mut lib_opts = LibraryOptions::new();
+        lib_opts.set_selection(Selection::Ext(String::from("flac")));
+
+        let meta_target_specs = vec![
+            (String::from("taggu_self.yml"), MetaTarget::Contains),
+            (String::from("taggu_item.yml"), MetaTarget::Siblings),
+        ];
+
+        let media_lib = MediaLibrary::new_with_options(temp_media_root.path(), meta_target_specs, lib_opts).expect("Unable to create media library");
 
         // println!("\n\n");
         lookup_field(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/1.01. Nhato - Gotta Get Down.flac"), &LookupOptions::new("artist"));
