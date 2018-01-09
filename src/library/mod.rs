@@ -2,6 +2,7 @@ pub mod selection;
 pub mod sort_order;
 
 use std::path::{Path, PathBuf};
+use std::marker::Sized;
 
 use helpers::normalize;
 use metadata::{MetaBlock, MetaTarget};
@@ -12,9 +13,55 @@ use error::*;
 use self::selection::Selection;
 use self::sort_order::SortOrder;
 
+pub type MetaTargetSpec = (String, MetaTarget);
+
+pub struct LibraryOptions {
+    meta_target_specs: Vec<MetaTargetSpec>,
+    selection: Selection,
+    sort_order: SortOrder,
+}
+
+impl LibraryOptions {
+    pub fn new() -> Self {
+        LibraryOptions {
+            meta_target_specs: vec![],
+            selection: Selection::True,
+            sort_order: SortOrder::Name,
+        }
+    }
+
+    pub fn add_meta_target_spec<S: Into<String>>(&mut self, meta_file_name: S, meta_target: MetaTarget) -> &mut Self {
+        self.meta_target_specs.push((meta_file_name.into(), meta_target));
+        self
+    }
+
+    pub fn set_selection(&mut self, selection: Selection) -> &mut Self {
+        self.selection = selection;
+        self
+    }
+
+    pub fn set_sort_order(&mut self, sort_order: SortOrder) -> &mut Self {
+        self.sort_order = sort_order;
+        self
+    }
+}
+
+pub trait Library {
+    fn new<P>(root_dir: P) -> Result<Self>
+    where Self: Sized,
+          P: AsRef<Path>,
+    {
+        Self::new_with(root_dir, LibraryOptions::new())
+    }
+
+    fn new_with<P>(root_dir: P, library_options: LibraryOptions) -> Result<Self>
+    where Self: Sized,
+          P: AsRef<Path>;
+}
+
 pub struct MediaLibrary {
     root_dir: PathBuf,
-    meta_target_pairs: Vec<(String, MetaTarget)>,
+    meta_target_pairs: Vec<MetaTargetSpec>,
     selection: Selection,
     sort_order: SortOrder,
 }
@@ -24,7 +71,7 @@ impl MediaLibrary {
     /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
     pub fn new<P: AsRef<Path>>(
             root_dir: P,
-            meta_target_pairs: Vec<(String, MetaTarget)>,
+            meta_target_pairs: Vec<MetaTargetSpec>,
             selection: Selection,
             sort_order: SortOrder,
             ) -> Result<MediaLibrary>

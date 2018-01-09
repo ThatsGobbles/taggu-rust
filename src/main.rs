@@ -18,6 +18,7 @@ mod plexer;
 mod lookup;
 mod error;
 mod generator;
+mod meta_provider;
 
 fn main() {
 }
