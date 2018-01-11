@@ -1,9 +1,9 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
 use library::MediaLibrary;
 use helpers::normalize;
-use metadata::MetaValue;
+use metadata::{MetaValue, MetaTarget};
 use error::*;
 
 trait LabelExtractor {
@@ -63,7 +63,14 @@ impl LookupOptions {
     }
 }
 
-pub type LookupOutcome = Option<MetaValue>;
+pub struct LookupOutcomeNew {
+    meta_value: MetaValue,
+    meta_target: MetaTarget,
+    meta_file_path: PathBuf,
+    item_file_path: PathBuf,
+}
+
+pub type LookupOutcome = Option<(MetaValue, PathBuf)>;
 
 pub fn lookup_origin<P: AsRef<Path>>(
     media_library: &MediaLibrary,
@@ -86,11 +93,11 @@ pub fn lookup_origin<P: AsRef<Path>>(
                 // Found a match for this path, check if the desired field is contained in meta block.
                 match found_meta_block.get(&options.field_name) {
                     Some(val) => {
-                        println!("Found value: {:?}", val);
-                        return Ok(Some(val.clone()))
+                        // println!("Found value: {:?}", val);
+                        return Ok(Some((val.clone(), found_item_path)))
                     },
                     None => {
-                        println!("Value not found here");
+                        // println!("Value not found here");
                         continue 'item;
                     }
                 }
@@ -140,28 +147,36 @@ mod tests {
     use library::{MediaLibrary, LibraryBuilder};
     use library::selection::Selection;
     use library::sort_order::SortOrder;
-    use metadata::MetaTarget;
+    use metadata::{MetaTarget, MetaValue};
     use test_helpers::create_temp_media_test_dir;
 
     #[test]
     fn test_lookup_origin() {
         let temp_media_root = create_temp_media_test_dir("test_lookup_origin");
+        let tp = temp_media_root.path();
         sleep(Duration::from_millis(1));
 
         let meta_target_specs = vec![
-            (String::from("taggu_self.yml"), MetaTarget::Contains),
-            (String::from("taggu_item.yml"), MetaTarget::Siblings),
+            (String::from("self.yml"), MetaTarget::Contains),
+            (String::from("item.yml"), MetaTarget::Siblings),
         ];
 
         let media_lib = LibraryBuilder::new(temp_media_root.path(), meta_target_specs).selection(Selection::Ext(String::from("flac"))).create().expect("Unable to create media library");
 
-        // println!("\n\n");
-        lookup_origin(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/1.01. Nhato - Gotta Get Down.flac"), &LookupOptions::new("artist"));
-        lookup_origin(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS/"), &LookupOptions::new("what field"));
-        lookup_origin(&media_lib, Path::new("/home/lemoine/Music/DJ Snake - Encore/1.09. DJ Snake feat. Travi$ Scott, Migos, & G4shi - Oh Me Oh My.flac"), &LookupOptions::new("feat.artist"));
-        // println!("---------------------");
-        // lookup_origin(&media_lib, Path::new("/home/lemoine/Music/BASS AVENGERS"), "COOL");
-        // println!("\n\n");
+        let inputs_and_expected = vec![
+            ((tp.join("ALBUM_01").join("DISC_01"), "const_key"), Some((MetaValue::Str("const_val".to_string()), tp.join("ALBUM_01").join("DISC_01")))),
+        ];
+
+        for ((target_item_path, field_name), expected) in inputs_and_expected {
+            let produced = lookup_origin(&media_lib, target_item_path, &LookupOptions::new(field_name)).unwrap();
+
+            match produced {
+                Some(ref result) => { println!("Found result: {:?}", result); },
+                None => { println!("Field not found!"); },
+            }
+
+            // assert_eq!(expected, produced);
+        }
     }
 
     #[test]

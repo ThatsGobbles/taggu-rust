@@ -1,3 +1,5 @@
+// TODO: Wrap in #[cfg(test)].
+
 use std::fs::{DirBuilder, File};
 use std::path::Path;
 use std::io::Write;
@@ -32,14 +34,27 @@ impl Entry {
     }
 }
 
-// enum TEntry<'a> {
-//     Dir(&'a str, &'a [Entry]),
-//     File(&'a str)
-// }
+enum TEntry<'a> {
+    Dir(&'a str, &'a [TEntry<'a>]),
+    File(&'a str)
+}
 
-// const TEST_DIR_ENTRIES: &[TEntry] = &[
-//     TEntry::File("ALBUM_04"),
-// ];
+const TEST_DIR_ENTRIES: &[TEntry] = &[
+    // Well-behaved album.
+    TEntry::Dir("ALBUM_01", &[
+        TEntry::Dir("DISC_01", &[
+            TEntry::File("TRACK_01"),
+            TEntry::File("TRACK_02"),
+            TEntry::File("TRACK_03"),
+        ]),
+        TEntry::Dir("DISC_02", &[
+            TEntry::File("TRACK_01"),
+            TEntry::File("TRACK_02"),
+            TEntry::File("TRACK_03"),
+        ]),
+    ]),
+    TEntry::File("ALBUM_04"),
+];
 
 const MEDIA_FILE_EXT: &str = "flac";
 
