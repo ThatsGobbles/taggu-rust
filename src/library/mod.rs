@@ -144,7 +144,6 @@ impl MediaLibrary {
 
         if let Some(working_dir_path) = abs_meta_path.parent() {
             // TODO: Need to check if working_dir_path is proper?
-
             if let Some(found_meta_fn) = abs_meta_path.file_name().and_then(|s| s.to_str()) {
                 // We have a meta file name, now try and match it to any of the file names in meta targets.
                 match self.meta_target_specs.iter().find(|&&(ref s, _)| *s == found_meta_fn) {
@@ -182,6 +181,17 @@ impl MediaLibrary {
 
         Ok(results)
     }
+
+    // pub fn children_paths<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<DirEntry>> {
+    //     let abs_meta_path = abs_meta_path.as_ref();
+
+    //     let mut dir_entries = self.selection.selected_entries_in_dir(abs_meta_path)?;
+    //     dir_entries.sort_unstable_by(|a, b| self.sort_order.path_sort_cmp(a.path(), b.path()));
+
+    //     dir_entries.iter().map(|e| e.path()).collect();
+
+    //     Ok(dir_entries)
+    // }
 }
 
 // =================================================================================================
