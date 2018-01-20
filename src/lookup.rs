@@ -157,6 +157,7 @@ pub fn lookup_children<P: AsRef<Path>>(
             None => {
                 // println!("Not found here, trying subchildren");
                 // Recurse down this path.
+                // Note that this will produce a list.
                 let sub_result = lookup_children(media_library, &child_abs_item_path, options)?;
 
                 match sub_result {
@@ -171,6 +172,7 @@ pub fn lookup_children<P: AsRef<Path>>(
         }
     }
 
+    // TODO: If an enpty list would be returned, would it be better to return None?
     Ok(Some(MetaValue::Seq(agg_results)))
 }
 
