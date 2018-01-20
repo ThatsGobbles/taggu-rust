@@ -140,29 +140,29 @@ pub fn lookup_children<P: AsRef<Path>>(
 
     let mut agg_results: Vec<MetaValue> = vec![];
 
-    println!("Calling lookup_children for: {:?}", curr_item_path);
+    // println!("Calling lookup_children for: {:?}", curr_item_path);
 
     // Look at the metadata for each child contained in this directory, in the expected order.
     for child_abs_item_path in media_library.children_paths(&curr_item_path)? {
-        println!("Checking child: {:?}", child_abs_item_path);
+        // println!("Checking child: {:?}", child_abs_item_path);
         // TODO: Do we want to short circuit on error here?
         let child_results = lookup_origin(media_library, &child_abs_item_path, options)?;
 
         match child_results {
             Some(ref child_values) => {
-                println!("Found result: {:?}", child_results.clone());
+                // println!("Found result: {:?}", child_results.clone());
                 // Found the value, add it to the results and do not recurse further on this path.
                 agg_results.push(child_values.clone());
             },
             None => {
-                println!("Not found here, trying subchildren");
+                // println!("Not found here, trying subchildren");
                 // Recurse down this path.
                 let sub_result = lookup_children(media_library, &child_abs_item_path, options)?;
 
                 match sub_result {
                     Some(sub_values) => { agg_results.push(sub_values); },
                     None => {
-                        println!("Not found at all");
+                        // println!("Not found at all");
                         // TODO: Do nothing, or return null here?
                         // Do nothing, this is a hole in the aggregation.
                     },
@@ -274,8 +274,8 @@ mod tests {
                 (tp.join("ALBUM_01"), "TRACK_01_item_key"),
                 Some(
                     MetaValue::Seq(vec![
-                        MetaValue::Str("TRACK_01_item_val".to_string()),
-                        MetaValue::Str("TRACK_01_item_val".to_string()),
+                        MetaValue::Seq(vec![MetaValue::Str("TRACK_01_item_val".to_string())]),
+                        MetaValue::Seq(vec![MetaValue::Str("TRACK_01_item_val".to_string())]),
                     ]),
                 ),
             ),
