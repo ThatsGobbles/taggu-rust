@@ -66,31 +66,6 @@ pub struct MediaLibrary {
 }
 
 impl MediaLibrary {
-    // /// Creates a new `MediaLibrary`.
-    // /// The root path is canonicalized and converted into a PathBuf, and must point to a directory.
-    // pub fn new<P, I>(root_dir: P, meta_target_specs: I) -> Result<Self>
-    // where P: AsRef<Path>,
-    //       I: IntoIterator<Item = (String, MetaTarget)>,
-    // {
-    //     Self::new_with_options(root_dir, meta_target_specs, LibraryOptions::new())
-    // }
-
-    // pub fn new_with_options<P, I>(root_dir: P, meta_target_specs: I, library_options: LibraryOptions) -> Result<Self>
-    // where P: AsRef<Path>,
-    //       I: IntoIterator<Item = (String, MetaTarget)>,
-    // {
-    //     let root_dir = root_dir.as_ref().canonicalize()?;
-    //     // let root_dir = root_dir.canonicalize()?;
-
-    //     ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
-
-    //     Ok(MediaLibrary {
-    //         root_dir,
-    //         meta_target_specs: meta_target_specs.into_iter().collect(),
-    //         library_options,
-    //     })
-    // }
-
     pub fn is_proper_sub_path<P: AsRef<Path>>(&self, abs_sub_path: P) -> bool {
         let abs_sub_path = normalize(abs_sub_path.as_ref());
 
@@ -182,21 +157,17 @@ impl MediaLibrary {
         Ok(results)
     }
 
-    // pub fn children_paths<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<DirEntry>> {
-    //     let abs_meta_path = abs_meta_path.as_ref();
+    pub fn children_paths<P: AsRef<Path>>(&self, abs_meta_path: P) -> Result<Vec<PathBuf>> {
+        let abs_meta_path = abs_meta_path.as_ref();
 
-    //     let mut dir_entries = self.selection.selected_entries_in_dir(abs_meta_path)?;
-    //     dir_entries.sort_unstable_by(|a, b| self.sort_order.path_sort_cmp(a.path(), b.path()));
+        let mut dir_entries = self.selection.selected_entries_in_dir(abs_meta_path)?;
+        dir_entries.sort_unstable_by(|a, b| self.sort_order.path_sort_cmp(a.path(), b.path()));
 
-    //     dir_entries.iter().map(|e| e.path()).collect();
+        let paths: Vec<_> = dir_entries.iter().map(|e| e.path()).collect();
 
-    //     Ok(dir_entries)
-    // }
+        Ok(paths)
+    }
 }
-
-// =================================================================================================
-// TESTS
-// =================================================================================================
 
 
 #[cfg(test)]
@@ -437,29 +408,5 @@ mod tests {
 
         assert!(media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).is_err());
     }
-
-    // // ASSOCIATED FUNCTIONS
-
-    // #[test]
-    // fn test_new() {
-    //     // Create temp directory.
-    //     let temp = TempDir::new("test_new").unwrap();
-    //     let tp = temp.path();
-
-    //     let db = DirBuilder::new();
-    //     let dir_path = tp.join("test");
-
-    //     db.create(&dir_path).unwrap();
-
-    //     let ml = MediaLibrary::new(dir_path, vec![]);
-
-    //     assert!(ml.is_ok());
-
-    //     let dir_path = tp.join("DOES_NOT_EXIST");
-
-    //     let ml = MediaLibrary::new(dir_path, vec![]);
-
-    //     assert!(ml.is_err());
-    // }
 }
 

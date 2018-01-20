@@ -63,20 +63,13 @@ impl LookupOptions {
     }
 }
 
-pub struct LookupOutcomeNew {
-    meta_value: MetaValue,
-    meta_target: MetaTarget,
-    meta_file_path: PathBuf,
-    item_file_path: PathBuf,
-}
-
-pub type LookupOutcome = Option<(MetaValue, PathBuf)>;
+pub type LookupResult = Result<Option<MetaValue>>;
 
 pub fn lookup_origin<P: AsRef<Path>>(
     media_library: &MediaLibrary,
     abs_item_path: P,
     options: &LookupOptions,
-    ) -> Result<LookupOutcome>
+    ) -> LookupResult
 {
     let abs_item_path = normalize(abs_item_path.as_ref());
 
@@ -93,7 +86,7 @@ pub fn lookup_origin<P: AsRef<Path>>(
                 // Found a match for this path, check if the desired field is contained in meta block.
                 match found_meta_block.get(&options.field_name) {
                     Some(val) => {
-                        return Ok(Some((val.clone(), found_item_path)))
+                        return Ok(Some(val.clone()))
                     },
                     None => {
                         continue 'item;
@@ -111,7 +104,7 @@ pub fn lookup_parents<P: AsRef<Path>>(
     media_library: &MediaLibrary,
     abs_item_path: P,
     options: &LookupOptions,
-    ) -> Result<LookupOutcome>
+    ) -> LookupResult
 {
     let mut curr_item_path = normalize(abs_item_path.as_ref());
 
@@ -136,7 +129,7 @@ pub fn lookup_children<P: AsRef<Path>>(
     media_library: &MediaLibrary,
     abs_item_path: P,
     options: &LookupOptions,
-    ) -> Result<LookupOutcome>
+    ) -> LookupResult
 {
     let curr_item_path = normalize(abs_item_path.as_ref());
 
@@ -145,11 +138,40 @@ pub fn lookup_children<P: AsRef<Path>>(
         return Ok(None);
     }
 
-    // Look at the metadata for each child contained in this directory, in the expected order.
-    // for child_abs_item_path in
+    let mut agg_results: Vec<MetaValue> = vec![];
 
-    // No error, but value was not found.
-    Ok(None)
+    println!("Calling lookup_children for: {:?}", curr_item_path);
+
+    // Look at the metadata for each child contained in this directory, in the expected order.
+    for child_abs_item_path in media_library.children_paths(&curr_item_path)? {
+        println!("Checking child: {:?}", child_abs_item_path);
+        // TODO: Do we want to short circuit on error here?
+        let child_results = lookup_origin(media_library, &child_abs_item_path, options)?;
+
+        match child_results {
+            Some(ref child_values) => {
+                println!("Found result: {:?}", child_results.clone());
+                // Found the value, add it to the results and do not recurse further on this path.
+                agg_results.push(child_values.clone());
+            },
+            None => {
+                println!("Not found here, trying subchildren");
+                // Recurse down this path.
+                let sub_result = lookup_children(media_library, &child_abs_item_path, options)?;
+
+                match sub_result {
+                    Some(sub_values) => { agg_results.push(sub_values); },
+                    None => {
+                        println!("Not found at all");
+                        // TODO: Do nothing, or return null here?
+                        // Do nothing, this is a hole in the aggregation.
+                    },
+                }
+            }
+        }
+    }
+
+    Ok(Some(MetaValue::Seq(agg_results)))
 }
 
 #[cfg(test)]
@@ -161,7 +183,7 @@ mod tests {
 
     use tempdir::TempDir;
 
-    use super::{lookup_origin, lookup_parents, LookupOptions};
+    use super::{lookup_origin, lookup_parents, lookup_children, LookupOptions};
     use library::{MediaLibrary, LibraryBuilder};
     use library::selection::Selection;
     use library::sort_order::SortOrder;
@@ -192,14 +214,14 @@ mod tests {
         let tp = temp_media_root.path();
 
         let inputs_and_expected = vec![
-            ((tp.join("ALBUM_01").join("DISC_01"), "const_key"), Some((MetaValue::Str("const_val".to_string()), tp.join("ALBUM_01").join("DISC_01")))),
-            ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_self_key"), Some((MetaValue::Str("DISC_01_self_val".to_string()), tp.join("ALBUM_01").join("DISC_01")))),
-            ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_item_key"), Some((MetaValue::Str("DISC_01_item_val".to_string()), tp.join("ALBUM_01").join("DISC_01")))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "const_key"), Some(MetaValue::Str("const_val".to_string()))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_self_key"), Some(MetaValue::Str("DISC_01_self_val".to_string()))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_item_key"), Some(MetaValue::Str("DISC_01_item_val".to_string()))),
             ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_item_key"), None),
             ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_self_key"), None),
             ((tp.join("ALBUM_01").join("DISC_01"), "NON_EXISTENT_KEY"), None),
             ((tp.to_path_buf(), "ROOT_item_key"), None),
-            ((tp.to_path_buf(), "ROOT_self_key"), Some((MetaValue::Str("ROOT_self_val".to_string()), tp.to_path_buf()))),
+            ((tp.to_path_buf(), "ROOT_self_key"), Some(MetaValue::Str("ROOT_self_val".to_string()))),
         ];
 
         for ((target_item_path, field_name), expected) in inputs_and_expected {
@@ -216,14 +238,14 @@ mod tests {
 
         let inputs_and_expected = vec![
             // TODO: Need a test to demo self meta overriding item meta.
-            ((tp.join("ALBUM_01").join("DISC_01"), "const_key"), Some((MetaValue::Str("const_val".to_string()), tp.join("ALBUM_01")))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "const_key"), Some(MetaValue::Str("const_val".to_string()))),
             ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_self_key"), None),
             ((tp.join("ALBUM_01").join("DISC_01"), "DISC_01_item_key"), None),
-            ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_item_key"), Some((MetaValue::Str("ALBUM_01_item_val".to_string()), tp.join("ALBUM_01")))),
-            ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_self_key"), Some((MetaValue::Str("ALBUM_01_self_val".to_string()), tp.join("ALBUM_01")))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_item_key"), Some(MetaValue::Str("ALBUM_01_item_val".to_string()))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "ALBUM_01_self_key"), Some(MetaValue::Str("ALBUM_01_self_val".to_string()))),
             ((tp.join("ALBUM_01").join("DISC_01"), "NON_EXISTENT_KEY"), None),
             ((tp.join("ALBUM_01").join("DISC_01"), "ROOT_item_key"), None),
-            ((tp.join("ALBUM_01").join("DISC_01"), "ROOT_self_key"), Some((MetaValue::Str("ROOT_self_val".to_string()), tp.to_path_buf()))),
+            ((tp.join("ALBUM_01").join("DISC_01"), "ROOT_self_key"), Some(MetaValue::Str("ROOT_self_val".to_string()))),
         ];
 
         for ((target_item_path, field_name), expected) in inputs_and_expected {
@@ -231,5 +253,40 @@ mod tests {
 
             assert_eq!(expected, produced);
         }
+    }
+
+    #[test]
+    fn test_lookup_children() {
+        let (temp_media_root, media_lib) = setup("test_lookup_children");
+        let tp = temp_media_root.path();
+
+        let inputs_and_expected = vec![
+            (
+                (tp.join("ALBUM_01"), "const_key"),
+                Some(
+                    MetaValue::Seq(vec![
+                        MetaValue::Str("const_val".to_string()),
+                        MetaValue::Str("const_val".to_string()),
+                    ]),
+                ),
+            ),
+            (
+                (tp.join("ALBUM_01"), "TRACK_01_item_key"),
+                Some(
+                    MetaValue::Seq(vec![
+                        MetaValue::Str("TRACK_01_item_val".to_string()),
+                        MetaValue::Str("TRACK_01_item_val".to_string()),
+                    ]),
+                ),
+            ),
+        ];
+
+        for ((target_item_path, field_name), expected) in inputs_and_expected {
+            let produced = lookup_children(&media_lib, target_item_path, &LookupOptions::new(field_name)).unwrap();
+
+            assert_eq!(expected, produced);
+        }
+
+        // let produced = lookup_children(&media_lib, tp.join("ALBUM_01"), &LookupOptions::new("const_key")).unwrap();
     }
 }
