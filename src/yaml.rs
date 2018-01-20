@@ -7,13 +7,13 @@ use yaml_rust::{YamlLoader, Yaml};
 
 use metadata::{
     Metadata,
-    MetaTarget,
-    MetaKey,
-    MetaValue,
     MetaBlock,
     MetaBlockSeq,
     MetaBlockMap,
+    MetaKey,
+    MetaValue,
 };
+use metadata::target::MetaTarget;
 use error::*;
 
 pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml> {
@@ -181,11 +181,7 @@ pub fn yaml_as_metadata(y: &Yaml, meta_target: &MetaTarget) -> Option<Metadata> 
 
 #[cfg(test)]
 mod tests {
-    use metadata::{
-        MetaKey,
-        MetaValue,
-        MetaBlock,
-    };
+    use metadata::{MetaBlock, MetaKey, MetaValue};
     use yaml_rust::{YamlLoader};
 
     use super::{

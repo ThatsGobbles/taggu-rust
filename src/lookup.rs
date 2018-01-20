@@ -3,7 +3,8 @@ use std::collections::HashSet;
 
 use library::MediaLibrary;
 use helpers::normalize;
-use metadata::{MetaValue, MetaTarget};
+use metadata::MetaValue;
+use metadata::target::MetaTarget;
 use error::*;
 
 trait LabelExtractor {
@@ -189,7 +190,8 @@ mod tests {
     use library::{MediaLibrary, LibraryBuilder};
     use library::selection::Selection;
     use library::sort_order::SortOrder;
-    use metadata::{MetaTarget, MetaValue};
+    use metadata::MetaValue;
+    use metadata::target::MetaTarget;
     use test_helpers::create_temp_media_test_dir;
 
     fn setup(name: &str) -> (TempDir, MediaLibrary) {

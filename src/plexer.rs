@@ -143,7 +143,6 @@ where I: IntoIterator<Item = &'a J>,
     results
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

@@ -5,7 +5,7 @@ use std::io::Read;
 use metadata::Metadata;
 use error::*;
 
-pub trait MetaProvider {
+pub trait MetaReader {
     fn from_str<S: AsRef<str>>(s: S) -> Result<Metadata>;
 
     fn from_file<P: AsRef<Path>>(p: P) -> Result<Metadata> {

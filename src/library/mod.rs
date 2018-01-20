@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::marker::Sized;
 
 use helpers::normalize;
-use metadata::{MetaBlock, MetaTarget};
+use metadata::MetaBlock;
+use metadata::target::MetaTarget;
 use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
 use error::*;
@@ -180,7 +181,8 @@ mod tests {
 
     use tempdir::TempDir;
 
-    use metadata::{MetaTarget, MetaValue, MetaBlock};
+    use metadata::{MetaBlock, MetaValue};
+    use metadata::target::MetaTarget;
     use library::{MediaLibrary, SortOrder, LibraryBuilder};
     use library::selection::Selection;
 
