@@ -10,6 +10,8 @@ use metadata::target::MetaTarget;
 use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
 use error::*;
+use metadata::reader::MetaReader;
+use metadata::reader::yaml::YamlMetaReader;
 
 use self::selection::Selection;
 use self::sort_order::SortOrder;
@@ -19,6 +21,7 @@ pub struct LibraryBuilder {
     meta_target_specs: Vec<(String, MetaTarget)>,
     selection: Selection,
     sort_order: SortOrder,
+    meta_reader: MetaReader,
 }
 
 impl LibraryBuilder {
@@ -31,6 +34,7 @@ impl LibraryBuilder {
             meta_target_specs: meta_target_specs.into_iter().collect(),
             selection: Selection::True,
             sort_order: SortOrder::Name,
+            meta_reader: YamlMetaReader {},
         }
     }
 
@@ -44,13 +48,13 @@ impl LibraryBuilder {
         self
     }
 
-    pub fn create(&self) -> Result<MediaLibrary> {
+    pub fn create(&self) -> Result<Library> {
         let root_dir = self.root_dir.canonicalize()?;
 
         ensure!(root_dir.is_dir(), ErrorKind::NotADirectory(root_dir.clone()));
 
         // TODO: Make this more efficient!
-        Ok(MediaLibrary {
+        Ok(Library {
             root_dir,
             meta_target_specs: self.meta_target_specs.clone(),
             selection: self.selection.clone(),
@@ -59,14 +63,14 @@ impl LibraryBuilder {
     }
 }
 
-pub struct MediaLibrary {
+pub struct Library {
     root_dir: PathBuf,
     meta_target_specs: Vec<(String, MetaTarget)>,
     selection: Selection,
     sort_order: SortOrder,
 }
 
-impl MediaLibrary {
+impl Library {
     pub fn is_proper_sub_path<P: AsRef<Path>>(&self, abs_sub_path: P) -> bool {
         let abs_sub_path = normalize(abs_sub_path.as_ref());
 
@@ -183,10 +187,8 @@ mod tests {
 
     use metadata::{MetaBlock, MetaValue};
     use metadata::target::MetaTarget;
-    use library::{MediaLibrary, SortOrder, LibraryBuilder};
+    use library::{Library, SortOrder, LibraryBuilder};
     use library::selection::Selection;
-
-    // METHODS
 
     #[test]
     fn test_is_proper_sub_path() {
@@ -264,7 +266,7 @@ mod tests {
             .expect("Unable to write metadata file");
 
         // Create media library.
-        let media_lib = LibraryBuilder::new(&tp, meta_targets).selection(selection).create().expect("Unable to create media library"); //MediaLibrary::new_with_options(&tp, meta_targets, library_options).expect("Unable to create media library");
+        let media_lib = LibraryBuilder::new(&tp, meta_targets).selection(selection).create().expect("Unable to create media library"); //Library::new_with_options(&tp, meta_targets, library_options).expect("Unable to create media library");
 
         // Run tests.
         let found: Vec<_> = media_lib.meta_fps_from_item_fp(&tp).expect("Unable to get meta fps");
@@ -346,12 +348,12 @@ mod tests {
                                 .selection(selection.clone())
                                 .sort_order(SortOrder::Name)
                                 .create()
-                                .expect("Unable to create media library"); // MediaLibrary::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
+                                .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
         let media_lib_seq = LibraryBuilder::new(&tp, meta_targets_seq)
                                 .selection(selection.clone())
                                 .sort_order(SortOrder::ModTime)
                                 .create()
-                                .expect("Unable to create media library"); // MediaLibrary::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
+                                .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
 
         // Run tests.
         let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).expect("Unable to get item fps");

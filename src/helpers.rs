@@ -5,22 +5,22 @@ use std::ops::Deref;
 
 use glob;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NormedPath {
-    path: PathBuf,
-}
+// #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+// pub struct NormedPath {
+//     path: PathBuf,
+// }
 
-impl NormedPath {
-    pub fn new<P: AsRef<Path>>(p: P) -> Self {
-        NormedPath {
-            path: normalize(p),
-        }
-    }
+// impl NormedPath {
+//     pub fn new<P: AsRef<Path>>(p: P) -> Self {
+//         NormedPath {
+//             path: normalize(p),
+//         }
+//     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
+//     pub fn path(&self) -> &PathBuf {
+//         &self.path
+//     }
+// }
 
 pub fn normalize<P: AsRef<Path>>(p: P) -> PathBuf {
     let p = p.as_ref();
@@ -173,21 +173,27 @@ where N: AsRef<str>,
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use super::{normalize, is_valid_item_name, fuzzy_name_match, FuzzyMatchError, NormedPath};
+    use super::{
+        normalize,
+        is_valid_item_name,
+        fuzzy_name_match,
+        FuzzyMatchError,
+        // NormedPath,
+    };
 
-    #[test]
-    fn test_normed_path() {
-        let p_and_e_inputs = vec![
-            (".", "."),
-            ("a/b/c/./d/e/../f/", "a/b/c/d/f"),
-        ];
+    // #[test]
+    // fn test_normed_path() {
+    //     let p_and_e_inputs = vec![
+    //         (".", "."),
+    //         ("a/b/c/./d/e/../f/", "a/b/c/d/f"),
+    //     ];
 
-        for (p_input, e_input) in p_and_e_inputs {
-            let expected = PathBuf::from(e_input);
-            let produced = NormedPath::new(p_input);
-            assert_eq!(&expected, produced.path());
-        }
-    }
+    //     for (p_input, e_input) in p_and_e_inputs {
+    //         let expected = PathBuf::from(e_input);
+    //         let produced = NormedPath::new(p_input);
+    //         assert_eq!(&expected, produced.path());
+    //     }
+    // }
 
     #[test]
     fn test_normalize() {

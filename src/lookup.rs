@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
-use library::MediaLibrary;
+use library::Library;
 use helpers::normalize;
 use metadata::MetaValue;
 use metadata::target::MetaTarget;
@@ -67,7 +67,7 @@ impl LookupOptions {
 pub type LookupResult = Result<Option<MetaValue>>;
 
 pub fn lookup_origin<P: AsRef<Path>>(
-    media_library: &MediaLibrary,
+    media_library: &Library,
     abs_item_path: P,
     options: &LookupOptions,
     ) -> LookupResult
@@ -102,7 +102,7 @@ pub fn lookup_origin<P: AsRef<Path>>(
 }
 
 pub fn lookup_parents<P: AsRef<Path>>(
-    media_library: &MediaLibrary,
+    media_library: &Library,
     abs_item_path: P,
     options: &LookupOptions,
     ) -> LookupResult
@@ -127,7 +127,7 @@ pub fn lookup_parents<P: AsRef<Path>>(
 }
 
 pub fn lookup_children<P: AsRef<Path>>(
-    media_library: &MediaLibrary,
+    media_library: &Library,
     abs_item_path: P,
     options: &LookupOptions,
     ) -> LookupResult
@@ -187,14 +187,14 @@ mod tests {
     use tempdir::TempDir;
 
     use super::{lookup_origin, lookup_parents, lookup_children, LookupOptions};
-    use library::{MediaLibrary, LibraryBuilder};
+    use library::{Library, LibraryBuilder};
     use library::selection::Selection;
     use library::sort_order::SortOrder;
     use metadata::MetaValue;
     use metadata::target::MetaTarget;
     use test_helpers::create_temp_media_test_dir;
 
-    fn setup(name: &str) -> (TempDir, MediaLibrary) {
+    fn setup(name: &str) -> (TempDir, Library) {
         let temp_media_root = create_temp_media_test_dir(name);
         sleep(Duration::from_millis(1));
 
