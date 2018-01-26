@@ -116,4 +116,37 @@ impl<'a> LookupCacher<'a> {
     pub fn clear_item_file<P: AsRef<Path>>(&mut self, item_fp: P) -> Result<()> {
         self.clear_item_files(&[item_fp])
     }
+
+    pub fn get_meta_file<P: AsRef<Path>>(&mut self, meta_fp: P) -> Result<Option<&MetadataCache>> {
+        self.cache_meta_file(&meta_fp, false)?;
+
+        let result = self.cache.get(meta_fp.as_ref());
+
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_helpers::default_setup;
+
+    use super::{
+        LookupCacher,
+        MetadataCache,
+        MetaFileCache,
+    };
+
+    #[test]
+    fn test_new() {
+        let (temp_media_root, media_lib) = default_setup("test_new");
+        let tp = temp_media_root.path();
+
+        let mut cacher = LookupCacher::new(&media_lib);
+
+        assert!(cacher.cache.is_empty());
+
+        cacher.cache_meta_file(tp.join("ALBUM_01").join("item.yml"), false).expect("unable to cache meta file");
+
+        assert_eq!(1, cacher.cache.len());
+    }
 }

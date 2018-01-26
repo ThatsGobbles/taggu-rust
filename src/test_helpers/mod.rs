@@ -8,16 +8,10 @@ use std::time::Duration;
 
 use tempdir::TempDir;
 
-const A_LABEL: &str = "ALBUM";
-const D_LABEL: &str = "DISC";
-const T_LABEL: &str = "TRACK";
-const S_LABEL: &str = "SUBTRACK";
-
-#[derive(Clone, Copy)]
-enum ItemMetaType {
-    Seq,
-    Map,
-}
+use library::{Library, LibraryBuilder};
+use library::selection::Selection;
+use library::sort_order::SortOrder;
+use metadata::target::MetaTarget;
 
 enum TEntry<'a> {
     Dir(&'a str, &'a [TEntry<'a>]),
@@ -151,4 +145,21 @@ pub fn create_temp_media_test_dir(name: &str /*, imt: ItemMetaType*/) -> TempDir
 
     sleep(Duration::from_millis(1));
     root_dir
+}
+
+pub fn default_setup(name: &str) -> (TempDir, Library) {
+    let temp_media_root = create_temp_media_test_dir(name);
+
+    let meta_target_specs = vec![
+        (String::from("self.yml"), MetaTarget::Contains),
+        (String::from("item.yml"), MetaTarget::Siblings),
+    ];
+
+    let selection = Selection::Or(
+        Box::new(Selection::Ext(String::from("flac"))),
+        Box::new(Selection::IsDir),
+    );
+    let media_lib = LibraryBuilder::new(temp_media_root.path(), meta_target_specs).selection(selection).create().expect("Unable to create media library");
+
+    (temp_media_root, media_lib)
 }

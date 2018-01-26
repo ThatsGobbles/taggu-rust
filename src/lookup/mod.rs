@@ -262,29 +262,11 @@ mod tests {
     use library::selection::Selection;
     use metadata::MetaValue;
     use metadata::target::MetaTarget;
-    use test_helpers::create_temp_media_test_dir;
-
-    fn setup(name: &str) -> (TempDir, Library) {
-        let temp_media_root = create_temp_media_test_dir(name);
-        sleep(Duration::from_millis(1));
-
-        let meta_target_specs = vec![
-            (String::from("self.yml"), MetaTarget::Contains),
-            (String::from("item.yml"), MetaTarget::Siblings),
-        ];
-
-        let selection = Selection::Or(
-            Box::new(Selection::Ext(String::from("flac"))),
-            Box::new(Selection::IsDir),
-        );
-        let media_lib = LibraryBuilder::new(temp_media_root.path(), meta_target_specs).selection(selection).create().expect("Unable to create media library");
-
-        (temp_media_root, media_lib)
-    }
+    use test_helpers::{create_temp_media_test_dir, default_setup};
 
     #[test]
     fn test_lookup_origin() {
-        let (temp_media_root, media_lib) = setup("test_lookup_origin");
+        let (temp_media_root, media_lib) = default_setup("test_lookup_origin");
         let tp = temp_media_root.path();
 
         let inputs_and_expected = vec![
@@ -307,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_lookup_parents() {
-        let (temp_media_root, media_lib) = setup("test_lookup_origin");
+        let (temp_media_root, media_lib) = default_setup("test_lookup_origin");
         let tp = temp_media_root.path();
 
         let inputs_and_expected = vec![
@@ -331,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_lookup_children() {
-        let (temp_media_root, media_lib) = setup("test_lookup_children");
+        let (temp_media_root, media_lib) = default_setup("test_lookup_children");
         let tp = temp_media_root.path();
 
         let inputs_and_expected = vec![
