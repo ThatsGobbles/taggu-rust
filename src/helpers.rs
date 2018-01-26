@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf, Component};
 use std::fmt::{Formatter, Result as FmtResult, Display};
 use std::error::Error;
-use std::ops::Deref;
 
 use glob;
 

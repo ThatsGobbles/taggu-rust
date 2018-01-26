@@ -2,7 +2,6 @@ pub mod selection;
 pub mod sort_order;
 
 use std::path::{Path, PathBuf};
-use std::marker::Sized;
 
 use helpers::normalize;
 use metadata::MetaBlock;
@@ -10,8 +9,6 @@ use metadata::target::MetaTarget;
 use yaml::{read_yaml_file, yaml_as_metadata};
 use plexer::multiplex;
 use error::*;
-use metadata::reader::MetaReader;
-use metadata::reader::yaml::YamlMetaReader;
 
 use self::selection::Selection;
 use self::sort_order::SortOrder;
@@ -183,9 +180,9 @@ mod tests {
 
     use tempdir::TempDir;
 
-    use metadata::{MetaBlock, MetaValue};
+    use metadata::MetaValue;
     use metadata::target::MetaTarget;
-    use library::{Library, SortOrder, LibraryBuilder};
+    use library::{SortOrder, LibraryBuilder};
     use library::selection::Selection;
 
     #[test]
