@@ -21,7 +21,6 @@ pub struct LibraryBuilder {
     meta_target_specs: Vec<(String, MetaTarget)>,
     selection: Selection,
     sort_order: SortOrder,
-    meta_reader: MetaReader,
 }
 
 impl LibraryBuilder {
@@ -34,7 +33,6 @@ impl LibraryBuilder {
             meta_target_specs: meta_target_specs.into_iter().collect(),
             selection: Selection::True,
             sort_order: SortOrder::Name,
-            meta_reader: YamlMetaReader {},
         }
     }
 

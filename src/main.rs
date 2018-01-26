@@ -1,6 +1,7 @@
 #![feature(conservative_impl_trait)]
 #![feature(generators, generator_trait)]
 #![feature(type_ascription)]
+#![feature(entry_or_default)]
 
 extern crate tempdir;
 extern crate regex;

@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use library::Library;
 use helpers::normalize;
-use metadata::MetaValue;
+use metadata::{MetaValue, MetaBlock};
 use metadata::target::MetaTarget;
 use error::*;
 
@@ -61,6 +61,63 @@ impl LookupOptions {
         }
 
         self
+    }
+}
+
+pub type MetadataCache = HashMap<PathBuf, MetaBlock>;
+pub type MetaFileCache = HashMap<PathBuf, MetadataCache>;
+
+pub struct LookupContext<'a> {
+    media_lib: &'a Library,
+    cache: MetaFileCache,
+}
+
+impl<'a> LookupContext<'a> {
+    pub fn new(media_lib: &'a Library) -> LookupContext<'a> {
+        LookupContext {
+            media_lib,
+            cache: hashmap![],
+        }
+    }
+
+    fn cache_meta_files<I, P>(&mut self, meta_fps: I, force: bool) -> Result<()>
+    where I: IntoIterator<Item = P>,
+          P: AsRef<Path>,
+    {
+        for meta_fp in meta_fps.into_iter() {
+            let meta_fp = meta_fp.as_ref();
+
+            // Check if the entry is already cached, and skip if cache request is not forced.
+            if !force && self.cache.contains_key(meta_fp) {
+                continue;
+            }
+
+            // Remove the old entry from the cache.
+            // TODO: Create .remove_cached_meta_file().
+            let _ = self.cache.remove(meta_fp);
+
+            // Temporary metadata cache, filled in below.
+            let mut temp: MetadataCache = hashmap![];
+
+            for (item_fp, meta_block) in self.media_lib.item_fps_from_meta_fp(meta_fp)? {
+                temp.insert(item_fp, meta_block);
+            }
+
+            self.cache.insert(meta_fp.to_path_buf(), temp);
+        }
+
+        Ok(())
+    }
+
+    fn cache_meta_file<P: AsRef<Path>>(&mut self, meta_fp: P, force: bool) -> Result<()> {
+        self.cache_meta_files(&[meta_fp], force)
+    }
+
+    fn cache_item_files<I, P>(&mut self, item_fps: I, force: bool) -> Result<()>
+    where I: IntoIterator<Item = P>,
+          P: AsRef<Path>,
+    {
+        Ok(())
     }
 }
 
