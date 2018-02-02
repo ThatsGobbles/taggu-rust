@@ -19,6 +19,7 @@ mod plexer;
 mod lookup;
 mod error;
 mod test_helpers;
+mod resolver;
 
 fn main() {
 }

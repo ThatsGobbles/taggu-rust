@@ -15,12 +15,6 @@ trait LabelExtractor {
 
 pub type LookupResult = Result<Option<MetaValue>>;
 
-pub enum LookupDirection {
-    Origin,
-    Parents,
-    Children,
-}
-
 pub struct LookupContext<'a> {
     media_lib: &'a Library,
     cache: MetaFileCache,
@@ -197,9 +191,8 @@ impl<'a> LookupContext<'a> {
         self.cache_item_files(&[item_fp], force)
     }
 
-    pub fn clear(&mut self) -> Result<()> {
+    pub fn clear(&mut self) {
         self.cache.clear();
-        Ok(())
     }
 
     pub fn clear_meta_files<I, P>(&mut self, meta_fps: I) -> Result<()>
@@ -292,7 +285,7 @@ mod tests {
 
     #[test]
     fn test_new() {
-        let (temp_media_root, media_lib) = default_setup("test_new");
+        let (_, media_lib) = default_setup("test_new");
 
         let lookup_ctx = LookupContext::new(&media_lib);
 
@@ -596,7 +589,7 @@ mod tests {
         let produced_meta_fps: HashSet<PathBuf> = extract_all_meta_fps(&lookup_ctx.cache);
         assert_eq!(expected_meta_fps, produced_meta_fps);
 
-        lookup_ctx.clear().expect("Unable to clear cache");
+        lookup_ctx.clear();
 
         let expected_meta_fps = hashset![];
         let produced_meta_fps: HashSet<PathBuf> = extract_all_meta_fps(&lookup_ctx.cache);

@@ -149,7 +149,7 @@ mod tests {
     fn test_meta_value_flatten() {
         let str_sample_a = "Goldfish".to_string();
         let str_sample_b = "DIMMI".to_string();
-        let str_sample_c = "Pontifexx".to_string();
+        // let str_sample_c = "Pontifexx".to_string();
         let seq_sample = vec![MetaValue::Str(str_sample_a.clone()), MetaValue::Str(str_sample_b.clone())];
 
         let mis = MappingIterScheme::Both;
