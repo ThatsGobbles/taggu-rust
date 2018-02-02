@@ -18,7 +18,6 @@ mod metadata;
 mod plexer;
 mod lookup;
 mod error;
-mod generator;
 mod test_helpers;
 
 fn main() {

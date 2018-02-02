@@ -10,7 +10,6 @@ use tempdir::TempDir;
 
 use library::{Library, LibraryBuilder};
 use library::selection::Selection;
-use library::sort_order::SortOrder;
 use metadata::target::MetaTarget;
 
 enum TEntry<'a> {
