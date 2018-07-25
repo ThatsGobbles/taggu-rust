@@ -18,6 +18,6 @@ pub trait MetaReader {
         let mut buffer = String::new();
         f.read_to_string(&mut buffer)?;
 
-        Self::from_str(buffer, mt).chain_err(|| "umable to parse text")
+        Self::from_str(buffer, mt).chain_err(|| "unable to parse text")
     }
 }

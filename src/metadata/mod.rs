@@ -2,16 +2,57 @@ pub mod reader;
 pub mod target;
 
 use std::path::{Path, PathBuf};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::DirEntry;
 
 use library::sort_order::SortOrder;
 use library::selection::Selection;
 use error::*;
+use generator::GenConverter;
 
 pub type MetaBlock = BTreeMap<String, MetaValue>;
 pub type MetaBlockSeq = Vec<MetaBlock>;
 pub type MetaBlockMap = BTreeMap<String, MetaBlock>;
+
+/// Mapping of item file paths to their complete metadata blocks.
+pub type PathMetaListing = HashMap<PathBuf, MetaBlock>;
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
+pub enum MetaTarget {
+    Contains,
+    Siblings,
+}
+
+impl MetaTarget {
+    pub fn get_target_meta_path<P: AsRef<Path>>(&self, item_path: P) -> Result<PathBuf> {
+        let item_path: &Path = item_path.as_ref();
+
+        ensure!(item_path.exists(), ErrorKind::DoesNotExist(item_path.to_path_buf()));
+
+        let meta_path = match *self {
+            MetaTarget::Contains => {
+                ensure!(item_path.is_dir(), ErrorKind::NotADirectory(item_path.to_path_buf()));
+
+                item_path.join("taggu_self.yml")
+            },
+            MetaTarget::Siblings => {
+                match item_path.parent() {
+                    Some(item_path_parent) => item_path_parent.join("taggu_item.yml"),
+                    None => bail!(ErrorKind::CappedAtRoot),
+                }
+            }
+        };
+
+        ensure!(meta_path.exists(), ErrorKind::DoesNotExist(meta_path.to_path_buf()));
+        ensure!(meta_path.is_file(), ErrorKind::NotAFile(meta_path.to_path_buf()));
+
+        Ok(meta_path)
+    }
+
+    pub fn get_target_metadata<P: AsRef<Path>>(&self, item_path: P) -> Result<PathMetaListing> {
+        Ok(hashmap![])
+    }
+}
 
 /// A data structure-level representation of all possible metadata types and their formats.
 /// This is intended to be independent of the text-level representation of the metadata.
@@ -69,11 +110,15 @@ pub enum MetaKey {
 }
 
 impl MetaKey {
-    pub fn flatten<'a>(&'a self) -> Vec<&'a String> {
-        match *self {
-            MetaKey::Nil => vec![],
-            MetaKey::Str(ref s) => vec![s],
-        }
+    pub fn iter_over<'a>(&'a self) -> impl Iterator<Item = &'a String> {
+        let closure = move || {
+            match *self {
+                MetaKey::Nil => {},
+                MetaKey::Str(ref s) => { yield s; },
+            }
+        };
+
+        GenConverter::gen_to_iter(closure)
     }
 }
 
@@ -86,49 +131,45 @@ pub enum MetaValue {
 }
 
 impl MetaValue {
-    pub fn flatten<'a>(&'a self, mis: MappingIterScheme) -> Vec<&'a String> {
-        match *self {
-            MetaValue::Nil => vec![],
-            MetaValue::Str(ref s) => vec![s],
-            MetaValue::Seq(ref mvs) => mvs.iter().flat_map(|mv| mv.flatten(mis)).collect(),
-            MetaValue::Map(ref map) => {
-                map.iter().flat_map(|(k, v)| {
-                    // This yields nothing for null keys.
-                    // Takes advantage of the fact that due to our definition of the enum, null values are first in the btree map.
-                    let mut res = vec![];
-                    match mis {
-                        MappingIterScheme::Keys | MappingIterScheme::Both => { res.extend(k.flatten()); },
-                        MappingIterScheme::Vals => {},
-                    };
+    pub fn iter_over<'a>(&'a self, mis: MappingIterScheme) -> impl Iterator<Item = &'a String> {
+        let closure = move || {
+            match *self {
+                MetaValue::Nil => {},
+                MetaValue::Str(ref s) => { yield s; },
+                MetaValue::Seq(ref mvs) => {
+                    for mv in mvs {
+                        for i in Box::new(mv.iter_over(mis)) {
+                            yield i;
+                        }
+                    }
+                },
+                MetaValue::Map(ref map) => {
+                    for (mk, mv) in map {
+                        match mis {
+                            MappingIterScheme::Keys | MappingIterScheme::Both => {
+                                // This outputs the value of the Nil key first, but only if a BTreeMap is used.
+                                for s in Box::new(mk.iter_over()) {
+                                    yield s;
+                                }
+                            },
+                            MappingIterScheme::Vals => {},
+                        };
 
-                    match mis {
-                        MappingIterScheme::Vals | MappingIterScheme::Both => { res.extend(v.flatten(mis)); },
-                        MappingIterScheme::Keys => {},
-                    };
+                        match mis {
+                            MappingIterScheme::Vals | MappingIterScheme::Both => {
+                                for s in Box::new(mv.iter_over(mis)) {
+                                    yield s;
+                                }
+                            },
+                            MappingIterScheme::Keys => {},
+                        };
+                    }
+                },
+            }
+        };
 
-                    res
-                }).collect()
-            },
-        }
+        GenConverter::gen_to_iter(closure)
     }
-
-    // LEARN: Generators use stackless coroutines, so they can't be recursive. :(
-    // pub fn iter_over<'a>(&'a self) -> impl Iterator<Item = &String> + 'a {
-    //     let closure = move || {
-    //         match *self {
-    //             MetaValue::Nil => {},
-    //             MetaValue::Str(ref s) => { yield s; },
-    //             MetaValue::Seq(ref mvs) => {
-    //                 for mv in mvs {
-    //                     for i in mv.iter_over() {
-    //                         yield i;
-    //                     }
-    //                 }
-    //             },
-    //             _ => {},
-
-    //     gen_to_iter(closure)
-    // }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
@@ -161,7 +202,7 @@ mod tests {
         ];
 
         for (input, expected) in inputs_and_expected {
-            let produced: Vec<&String> = input.flatten(mis);
+            let produced: Vec<&String> = input.iter_over(mis).collect();
             assert_eq!(expected, produced);
         }
     }

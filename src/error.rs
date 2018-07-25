@@ -30,6 +30,10 @@ error_chain!{
             description("invalid metadata format")
             display("invalid metadata format")
         }
+        CappedAtRoot {
+            description("cannot go above file system root")
+            display("cannot go above file system root")
+        }
     }
 
     foreign_links {

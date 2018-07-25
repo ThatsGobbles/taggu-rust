@@ -1,4 +1,3 @@
-#![feature(conservative_impl_trait)]
 #![feature(generators, generator_trait)]
 #![feature(type_ascription)]
 #![feature(entry_or_default)]
@@ -20,6 +19,7 @@ mod lookup;
 mod error;
 mod test_helpers;
 mod resolver;
+mod generator;
 
 fn main() {
 }
