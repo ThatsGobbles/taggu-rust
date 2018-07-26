@@ -12,8 +12,8 @@ use metadata::{
     MetaBlockMap,
     MetaKey,
     MetaValue,
+    MetaTarget,
 };
-use metadata::target::MetaTarget;
 use error::*;
 
 pub fn read_yaml_file<P: AsRef<Path>>(yaml_fp: P) -> Result<Yaml> {

@@ -1,10 +1,10 @@
 pub mod reader;
-pub mod target;
 
 use std::path::{Path, PathBuf};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::DirEntry;
 
+use metadata::reader::MetaReader;
 use library::sort_order::SortOrder;
 use library::selection::Selection;
 use error::*;
@@ -49,7 +49,15 @@ impl MetaTarget {
         Ok(meta_path)
     }
 
-    pub fn get_target_metadata<P: AsRef<Path>>(&self, item_path: P) -> Result<PathMetaListing> {
+    pub fn get_target_metadata<P: AsRef<Path>, MR: MetaReader>(&self, item_path: P) -> Result<PathMetaListing> {
+        let meta_path = self.get_target_meta_path(item_path)?;
+
+        // Try to load metadata in the format associated with the MetaTarget.
+        match *self {
+            MetaTarget::Contains => {},
+            MetaTarget::Siblings => {},
+        }
+
         Ok(hashmap![])
     }
 }

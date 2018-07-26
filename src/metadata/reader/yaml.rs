@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use yaml_rust::{Yaml, YamlLoader};
 
 use metadata::reader::MetaReader;
-use metadata::target::MetaTarget;
 use metadata::{
     Metadata,
     MetaBlock,
@@ -11,13 +10,15 @@ use metadata::{
     MetaBlockMap,
     MetaKey,
     MetaValue,
+    MetaTarget,
+    PathMetaListing,
 };
 use error::*;
 
 pub struct YamlMetaReader;
 
 impl MetaReader for YamlMetaReader {
-    fn from_str<S: AsRef<str>>(s: S, mt: MetaTarget) -> Result<Metadata> {
+    fn from_str<S: AsRef<str>>(s: S, mt: MetaTarget) -> Result<PathMetaListing> {
         let s = s.as_ref();
         let yaml_docs: Vec<Yaml> = YamlLoader::load_from_str(s)?;
 
@@ -28,7 +29,8 @@ impl MetaReader for YamlMetaReader {
 
         let yaml_doc = &yaml_docs[0];
 
-        yaml_as_metadata(yaml_doc, mt)
+        // yaml_as_metadata(yaml_doc, mt)
+        Ok(hashmap![])
     }
 }
 

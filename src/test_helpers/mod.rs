@@ -10,7 +10,7 @@ use tempdir::TempDir;
 
 use library::{Library, LibraryBuilder};
 use library::selection::Selection;
-use metadata::target::MetaTarget;
+use metadata::MetaTarget;
 
 enum TEntry<'a> {
     Dir(&'a str, &'a [TEntry<'a>]),
