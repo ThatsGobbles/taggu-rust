@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_plex_multiple_map() {
-        let mb_map: MetaBlockMap = btreemap![
+        let mb_map: MetaBlockMap = hashmap![
             String::from("TRACK01.flac") => btreemap![
                 String::from("artist") => MetaValue::Seq(vec![
                     MetaValue::Str(String::from("MK")),

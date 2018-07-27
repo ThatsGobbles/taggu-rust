@@ -107,6 +107,28 @@ pub fn is_valid_item_name<S: AsRef<str>>(file_name: S) -> bool {
     }
 }
 
+pub fn is_valid_fn<S: AsRef<str>>(s: S) -> bool {
+    let s = s.as_ref();
+    let s_path = Path::new(s);
+    let components: Vec<_> = s_path.components().collect();
+
+    if components.len() != 1 {
+        return false;
+    }
+
+    match components[0] {
+        Component::Normal(_) => {},
+        _ => { return false; },
+    }
+
+    let mut p = PathBuf::new();
+    for c in components {
+        p.push(c.as_os_str());
+    }
+
+    p.as_os_str() == s_path.as_os_str()
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum FuzzyMatchError {
     InvalidPattern(String),

@@ -12,10 +12,17 @@ use generator::GenConverter;
 
 pub type MetaBlock = BTreeMap<String, MetaValue>;
 pub type MetaBlockSeq = Vec<MetaBlock>;
-pub type MetaBlockMap = BTreeMap<String, MetaBlock>;
+pub type MetaBlockMap = HashMap<String, MetaBlock>;
 
 /// Mapping of item file paths to their complete metadata blocks.
 pub type PathMetaListing = HashMap<PathBuf, MetaBlock>;
+
+/// Represents the different metadata formats/layouts found among all types of meta targets.
+pub enum MetaFormat {
+    One(MetaBlock),
+    Seq(MetaBlockSeq),
+    Map(MetaBlockMap),
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
 pub enum MetaTarget {

@@ -277,133 +277,133 @@ mod tests {
     //     assert_eq!(Vec::<PathBuf>::new(), found);
     // }
 
-    #[test]
-    fn test_item_fps_from_meta_fp() {
-        // Create temp directory.
-        let temp = TempDir::new("test_item_fps_from_meta_fp").unwrap();
-        let tp = temp.path();
+    // #[test]
+    // fn test_item_fps_from_meta_fp() {
+    //     // Create temp directory.
+    //     let temp = TempDir::new("test_item_fps_from_meta_fp").unwrap();
+    //     let tp = temp.path();
 
-        let db = DirBuilder::new();
+    //     let db = DirBuilder::new();
 
-        let meta_targets_map = vec![
-            (String::from("self.yml"), MetaTarget::Contains),
-            (String::from("item_map.yml"), MetaTarget::Siblings),
-        ];
-        let meta_targets_seq = vec![
-            (String::from("self.yml"), MetaTarget::Contains),
-            (String::from("item_seq.yml"), MetaTarget::Siblings),
-        ];
-        let selection = Selection::Or(
-            Box::new(Selection::IsDir),
-            Box::new(
-                Selection::And(
-                    Box::new(Selection::IsFile),
-                    Box::new(Selection::Ext("flac".to_string())),
-                ),
-            ),
-        );
+    //     let meta_targets_map = vec![
+    //         (String::from("self.yml"), MetaTarget::Contains),
+    //         (String::from("item_map.yml"), MetaTarget::Siblings),
+    //     ];
+    //     let meta_targets_seq = vec![
+    //         (String::from("self.yml"), MetaTarget::Contains),
+    //         (String::from("item_seq.yml"), MetaTarget::Siblings),
+    //     ];
+    //     let selection = Selection::Or(
+    //         Box::new(Selection::IsDir),
+    //         Box::new(
+    //             Selection::And(
+    //                 Box::new(Selection::IsFile),
+    //                 Box::new(Selection::Ext("flac".to_string())),
+    //             ),
+    //         ),
+    //     );
 
-        // Create sample item files and directories.
-        db.create(tp.join("subdir")).unwrap();
-        sleep(Duration::from_millis(5));
-        File::create(tp.join("item.flac")).unwrap();
-        sleep(Duration::from_millis(5));
-        File::create(tp.join("subdir").join("subitem.flac")).unwrap();
-        sleep(Duration::from_millis(5));
+    //     // Create sample item files and directories.
+    //     db.create(tp.join("subdir")).unwrap();
+    //     sleep(Duration::from_millis(5));
+    //     File::create(tp.join("item.flac")).unwrap();
+    //     sleep(Duration::from_millis(5));
+    //     File::create(tp.join("subdir").join("subitem.flac")).unwrap();
+    //     sleep(Duration::from_millis(5));
 
-        // Create meta files.
-        let mut meta_file = File::create(tp.join("self.yml"))
-            .expect("Unable to create metadata file");
+    //     // Create meta files.
+    //     let mut meta_file = File::create(tp.join("self.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "title: PsyStyle Nation\nartist: [lapix, Massive New Krew]")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "title: PsyStyle Nation\nartist: [lapix, Massive New Krew]")
+    //         .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("item_map.yml"))
-            .expect("Unable to create metadata file");
+    //     let mut meta_file = File::create(tp.join("item_map.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "item.flac:\n  title: Black Mamba\n  artist: lapix\nsubdir:\n  title: What Is This?")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "item.flac:\n  title: Black Mamba\n  artist: lapix\nsubdir:\n  title: What Is This?")
+    //         .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("item_seq.yml"))
-            .expect("Unable to create metadata file");
+    //     let mut meta_file = File::create(tp.join("item_seq.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "- title: Black Mamba\n  artist: lapix\n- title: What Is This?")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "- title: Black Mamba\n  artist: lapix\n- title: What Is This?")
+    //         .expect("Unable to write metadata file");
 
-        let mut meta_file = File::create(tp.join("subdir").join("self.yml"))
-            .expect("Unable to create metadata file");
+    //     let mut meta_file = File::create(tp.join("subdir").join("self.yml"))
+    //         .expect("Unable to create metadata file");
 
-        writeln!(meta_file, "title: A Subtrack?\nartist: Massive New Krew")
-            .expect("Unable to write metadata file");
+    //     writeln!(meta_file, "title: A Subtrack?\nartist: Massive New Krew")
+    //         .expect("Unable to write metadata file");
 
-        // Create media libraries.
-        let media_lib_map = LibraryBuilder::new(&tp, meta_targets_map)
-                                .selection(selection.clone())
-                                .sort_order(SortOrder::Name)
-                                .create()
-                                .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
-        let media_lib_seq = LibraryBuilder::new(&tp, meta_targets_seq)
-                                .selection(selection.clone())
-                                .sort_order(SortOrder::ModTime)
-                                .create()
-                                .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
+    //     // Create media libraries.
+    //     let media_lib_map = LibraryBuilder::new(&tp, meta_targets_map)
+    //                             .selection(selection.clone())
+    //                             .sort_order(SortOrder::Name)
+    //                             .create()
+    //                             .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_map, library_options_map).expect("Unable to create media library");
+    //     let media_lib_seq = LibraryBuilder::new(&tp, meta_targets_seq)
+    //                             .selection(selection.clone())
+    //                             .sort_order(SortOrder::ModTime)
+    //                             .create()
+    //                             .expect("Unable to create media library"); // Library::new_with_options(&tp, meta_targets_seq, library_options_seq).expect("Unable to create media library");
 
-        // Run tests.
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).expect("Unable to get item fps");
-        assert_eq!(
-            vec![
-                (tp.to_path_buf(), btreemap![
-                    String::from("title") => MetaValue::Str(String::from("PsyStyle Nation")),
-                    String::from("artist") =>
-                        MetaValue::Seq(vec![
-                            MetaValue::Str(String::from("lapix")),
-                            MetaValue::Str(String::from("Massive New Krew")),
-                        ]),
-                ])
-            ],
-            found
-        );
+    //     // Run tests.
+    //     let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("self.yml")).expect("Unable to get item fps");
+    //     assert_eq!(
+    //         vec![
+    //             (tp.to_path_buf(), btreemap![
+    //                 String::from("title") => MetaValue::Str(String::from("PsyStyle Nation")),
+    //                 String::from("artist") =>
+    //                     MetaValue::Seq(vec![
+    //                         MetaValue::Str(String::from("lapix")),
+    //                         MetaValue::Str(String::from("Massive New Krew")),
+    //                     ]),
+    //             ])
+    //         ],
+    //         found
+    //     );
 
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("item_map.yml")).expect("Unable to get item fps");
-        assert_eq!(
-            vec![
-                (tp.join("item.flac"), btreemap![
-                    String::from("artist") => MetaValue::Str(String::from("lapix")),
-                    String::from("title") => MetaValue::Str(String::from("Black Mamba")),
-                ]),
-                (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::Str(String::from("What Is This?")),
-                ]),
-            ],
-            found
-        );
+    //     let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("item_map.yml")).expect("Unable to get item fps");
+    //     assert_eq!(
+    //         vec![
+    //             (tp.join("item.flac"), btreemap![
+    //                 String::from("artist") => MetaValue::Str(String::from("lapix")),
+    //                 String::from("title") => MetaValue::Str(String::from("Black Mamba")),
+    //             ]),
+    //             (tp.join("subdir"), btreemap![
+    //                 String::from("title") => MetaValue::Str(String::from("What Is This?")),
+    //             ]),
+    //         ],
+    //         found
+    //     );
 
-        let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml")).expect("Unable to get item fps");
-        assert_eq!(
-            vec![
-                (tp.join("item.flac"), btreemap![
-                    String::from("artist") => MetaValue::Str(String::from("lapix")),
-                    String::from("title") => MetaValue::Str(String::from("Black Mamba")),
-                ]),
-                (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::Str(String::from("What Is This?")),
-                ]),
-            ],
-            found
-        );
+    //     let found: Vec<_> = media_lib_seq.item_fps_from_meta_fp(tp.join("item_seq.yml")).expect("Unable to get item fps");
+    //     assert_eq!(
+    //         vec![
+    //             (tp.join("item.flac"), btreemap![
+    //                 String::from("artist") => MetaValue::Str(String::from("lapix")),
+    //                 String::from("title") => MetaValue::Str(String::from("Black Mamba")),
+    //             ]),
+    //             (tp.join("subdir"), btreemap![
+    //                 String::from("title") => MetaValue::Str(String::from("What Is This?")),
+    //             ]),
+    //         ],
+    //         found
+    //     );
 
-        let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("subdir").join("self.yml")).expect("Unable to get item fps");
-        assert_eq!(
-            vec![
-                (tp.join("subdir"), btreemap![
-                    String::from("title") => MetaValue::Str(String::from("A Subtrack?")),
-                    String::from("artist") => MetaValue::Str(String::from("Massive New Krew")),
-                ])
-            ],
-            found
-        );
+    //     let found: Vec<_> = media_lib_map.item_fps_from_meta_fp(tp.join("subdir").join("self.yml")).expect("Unable to get item fps");
+    //     assert_eq!(
+    //         vec![
+    //             (tp.join("subdir"), btreemap![
+    //                 String::from("title") => MetaValue::Str(String::from("A Subtrack?")),
+    //                 String::from("artist") => MetaValue::Str(String::from("Massive New Krew")),
+    //             ])
+    //         ],
+    //         found
+    //     );
 
-        assert!(media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).is_err());
-    }
+    //     assert!(media_lib_map.item_fps_from_meta_fp(tp.join("DOES_NOT_EXIST")).is_err());
+    // }
 }
 

@@ -35,19 +35,19 @@ impl MetaReader for YamlMetaReader {
 }
 
 fn yaml_as_string(y: &Yaml) -> Result<String> {
-    match y {
-        &Yaml::Null => bail!("cannot convert null to string"),
-        &Yaml::Array(_) => bail!("cannot convert sequence to string"),
-        &Yaml::Hash(_) => bail!("cannot convert mapping to string"),
-        &Yaml::String(ref s) => Ok(s.to_string()),
+    match *y {
+        Yaml::Null => bail!("cannot convert null to string"),
+        Yaml::Array(_) => bail!("cannot convert sequence to string"),
+        Yaml::Hash(_) => bail!("cannot convert mapping to string"),
+        Yaml::String(ref s) => Ok(s.to_string()),
 
         // TODO: The rest of these need to be revisited.
         // Ideally we would keep them as strings and not convert when parsing.
-        &Yaml::Real(ref r) => Ok(r.to_string()),
-        &Yaml::Integer(i) => Ok(i.to_string()),
-        &Yaml::Boolean(b) => Ok(b.to_string()),
-        &Yaml::Alias(_) => bail!("cannot convert alias to string"),
-        &Yaml::BadValue => bail!("cannot convert bad value to string"),
+        Yaml::Real(ref r) => Ok(r.to_string()),
+        Yaml::Integer(i) => Ok(i.to_string()),
+        Yaml::Boolean(b) => Ok(b.to_string()),
+        Yaml::Alias(_) => bail!("cannot convert alias to string"),
+        Yaml::BadValue => bail!("cannot convert bad value to string"),
     }
 }
 
@@ -72,7 +72,7 @@ fn yaml_as_meta_value(y: &Yaml) -> Result<MetaValue> {
             Ok(MetaValue::Seq(seq))
         },
         Yaml::Hash(ref hsh) => {
-            let mut map: BTreeMap<MetaKey, MetaValue> = BTreeMap::new();
+            let mut map: BTreeMap<MetaKey, MetaValue> = btreemap![];
 
             // Recursively convert each found YAML item into a meta value.
             for (key_y, val_y) in hsh {
@@ -137,6 +137,9 @@ pub fn yaml_as_meta_block_map(y: &Yaml) -> Result<MetaBlockMap> {
 
             for (key_y, val_y) in hsh {
                 let key = yaml_as_string(&key_y)?;
+
+                // TODO: Check that key is a valid item name!
+
                 let val = yaml_as_meta_block(&val_y)?;
 
                 item_map.insert(key, val);
