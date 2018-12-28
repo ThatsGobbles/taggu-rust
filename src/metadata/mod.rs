@@ -153,7 +153,10 @@ impl MetaValue {
                 MetaValue::Str(ref s) => { yield s; },
                 MetaValue::Seq(ref mvs) => {
                     for mv in mvs {
-                        for i in Box::new(mv.iter_over(mis)) {
+                        // We cannot hold a value of our return type across a yield as it makes the
+                        // generator type recursive. Erasing the type avoids this issue.
+                        let values: Box<dyn Iterator<Item = &String>> = Box::new(mv.iter_over(mis));
+                        for i in values {
                             yield i;
                         }
                     }
@@ -172,7 +175,8 @@ impl MetaValue {
 
                         match mis {
                             MappingIterScheme::Vals | MappingIterScheme::Both => {
-                                for s in Box::new(mv.iter_over(mis)) {
+                                let values: Box<dyn Iterator<Item = &String>> = Box::new(mv.iter_over(mis));
+                                for s in values {
                                     yield s;
                                 }
                             },
